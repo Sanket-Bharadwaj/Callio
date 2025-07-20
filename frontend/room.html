@@ -81,97 +81,283 @@
     <span id="toastMessage"></span>
   </div>
   <script>
-    // Setup
     const signalingServer = "wss://callio.onrender.com";
     const ws = new WebSocket(signalingServer);
     const roomId = new URLSearchParams(window.location.search).get("id");
     const isCreator = localStorage.getItem("isCreator") === "true";
-    const userName = localStorage.getItem("userName") || "You";
+    const userName = localStorage.getItem("userName") || prompt("Enter name") || "You";
+    localStorage.setItem("userName", userName);
 
     document.getElementById("room-code").textContent = roomId;
-    document.getElementById("local-name").textContent = userName;
 
-    document.getElementById("share-btn").onclick = () => {
-      const link = `${window.location.origin}${window.location.pathname}?id=${roomId}`;
-      navigator.clipboard.writeText(link).then(() => {
-        alert("Room link copied to clipboard:\n" + link);
+    const peers = {};
+    const streams = {};
+    const containers = {};
+    let localStream, currentCamId = null;
+    let micOn = false;
+    let camOn = false;
+
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      const toastMessage = document.getElementById("toastMessage");
+      toastMessage.textContent = msg;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
+    }
+
+    function showEmoji(el, emoji) {
+      const o = document.createElement("div");
+      o.className = "emoji-overlay";
+      o.textContent = emoji;
+      el.parentNode.append(o);
+      setTimeout(() => o.remove(), 1200);
+    }
+
+    function addVideo(peerName, stream, isLocal) {
+      if (containers[peerName]) return;
+      const div = document.createElement("div");
+      div.className = "video-container relative";
+      const vid = document.createElement("video");
+      vid.autoplay = vid.playsInline = true;
+      vid.srcObject = stream;
+      vid.className = "w-32 h-24 bg-black rounded-lg border-2 border-gray-600 object-cover";
+      vid.id = isLocal ? "local-video" : `remote-video-${peerName}`;
+      if (isLocal) vid.muted = true;
+      div.appendChild(vid);
+      const tag = document.createElement("div");
+      tag.className = "user-tag absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1 py-0.5 rounded";
+      tag.textContent = peerName;
+      div.appendChild(tag);
+      document.getElementById("videos").appendChild(div);
+      containers[peerName] = vid;
+      streams[peerName] = stream;
+      vid.play().catch(err => {
+        console.error(`Failed to play video for ${peerName}:`, err);
+        showToast(`Failed to play video for ${peerName}`);
       });
-    };
+    }
 
-    let localStream, remoteStream;
-    const localVideo = document.getElementById("local-video");
-    const remoteVideo = document.getElementById("remote-video");
-
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
-
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
-      localStream = stream;
-      localVideo.srcObject = stream;
-
-      stream.getTracks().forEach(track => peer.addTrack(track, stream));
-    });
-
-    peer.ontrack = (event) => {
-      if (!remoteStream) {
-        remoteStream = new MediaStream();
-        remoteVideo.srcObject = remoteStream;
+    async function startLocal() {
+      try {
+        const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+        currentCamId = currentCamId || cams?.[0]?.deviceId;
+        if (!currentCamId) {
+          showToast("No camera found");
+          return;
+        }
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: currentCamId } },
+          audio: true
+        });
+        localStream.getAudioTracks()[0].enabled = false;
+        localStream.getVideoTracks()[0].enabled = false;
+        addVideo(userName, localStream, true);
+        showToast("Camera and microphone off by default");
+      } catch (err) {
+        console.error("startLocal error:", err);
+        showToast("Failed to access camera or microphone");
       }
-      remoteStream.addTrack(event.track);
-    };
+    }
 
-    peer.onicecandidate = (event) => {
-      if (event.candidate) {
-        ws.send(JSON.stringify({
-          type: "signal",
-          roomId,
-          payload: { candidate: event.candidate }
-        }));
-      }
-    };
+    function createPeer(peerName, isInitiator) {
+      if (peers[peerName]) return;
+      const peer = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      });
+      peers[peerName] = peer;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "join", roomId }));
-      if (isCreator) {
+      localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+
+      peer.ontrack = (event) => {
+        if (!streams[peerName]) {
+          streams[peerName] = new MediaStream();
+          addVideo(peerName, streams[peerName], false);
+        }
+        streams[peerName].addTrack(event.track);
+        console.log(`Received stream for ${peerName}:`, streams[peerName]);
+      };
+
+      peer.onicecandidate = (event) => {
+        if (event.candidate) {
+          console.log(`Sending ICE candidate to ${peerName}`);
+          ws.send(JSON.stringify({
+            type: "signal",
+            roomId,
+            to: peerName,
+            from: userName,
+            payload: { candidate: event.candidate }
+          }));
+        }
+      };
+
+      peer.onconnectionstatechange = () => {
+        console.log(`Peer connection state for ${peerName}: ${peer.connectionState}`);
+        if (peer.connectionState === "failed" || peer.connectionState === "disconnected") {
+          showToast(`Connection to ${peerName} failed`);
+          delete peers[peerName];
+          if (containers[peerName]) {
+            containers[peerName].parentNode.remove();
+            delete containers[peerName];
+            delete streams[peerName];
+          }
+        }
+      };
+
+      if (isInitiator) {
         peer.createOffer().then(offer => {
           peer.setLocalDescription(offer);
-          ws.send(JSON.stringify({ type: "signal", roomId, payload: { sdp: offer } }));
+          console.log(`Sending SDP offer to ${peerName}`);
+          ws.send(JSON.stringify({
+            type: "signal",
+            roomId,
+            to: peerName,
+            from: userName,
+            payload: { sdp: offer }
+          }));
+        }).catch(err => {
+          console.error(`Failed to create offer for ${peerName}:`, err);
+          showToast(`Failed to initiate connection with ${peerName}`);
         });
       }
+    }
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      ws.send(JSON.stringify({ type: "join", roomId, from: userName }));
+      startLocal();
     };
 
     ws.onmessage = async (msg) => {
-      const { type, payload } = JSON.parse(msg.data);
+      const data = JSON.parse(msg.data);
+      console.log("WebSocket message received:", data);
+      const { type, payload, from, members } = data;
+
+      if (type === "joined") {
+        members?.forEach(m => {
+          if (m !== userName && !peers[m]) {
+            createPeer(m, isCreator || from !== userName);
+            showToast(`${m} joined`);
+          }
+        });
+      }
+
       if (type === "signal") {
+        const peerName = from;
+        if (!peers[peerName]) createPeer(peerName, false);
+        const peer = peers[peerName];
+
         if (payload.sdp) {
-          await peer.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          if (payload.sdp.type === "offer") {
-            const answer = await peer.createAnswer();
-            await peer.setLocalDescription(answer);
-            ws.send(JSON.stringify({ type: "signal", roomId, payload: { sdp: answer } }));
+          try {
+            await peer.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            if (payload.sdp.type === "offer") {
+              const answer = await peer.createAnswer();
+              await peer.setLocalDescription(answer);
+              console.log(`Sending SDP answer to ${peerName}`);
+              ws.send(JSON.stringify({
+                type: "signal",
+                roomId,
+                to: peerName,
+                from: userName,
+                payload: { sdp: answer }
+              }));
+            }
+          } catch (err) {
+            console.error(`Failed to handle SDP for ${peerName}:`, err);
+            showToast(`Failed to connect with ${peerName}`);
           }
         }
+
         if (payload.candidate) {
-          await peer.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          try {
+            await peer.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            console.log(`Added ICE candidate for ${peerName}`);
+          } catch (err) {
+            console.error(`Failed to add ICE candidate for ${peerName}:`, err);
+          }
         }
+      }
+
+      if (type === "emoji") {
+        const vid = containers[from];
+        if (vid) showEmoji(vid, data.emoji);
+        showToast(`${from}: ${data.emoji}`);
       }
     };
 
-    // Controls
-    let micOn = true;
-    let camOn = true;
+    ws.onerror = err => {
+      console.error("WebSocket error:", err);
+      showToast("WebSocket connection error");
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket closed");
+      showToast("WebSocket connection closed");
+    };
 
     document.getElementById("mute-btn").onclick = () => {
       micOn = !micOn;
       localStream.getAudioTracks()[0].enabled = micOn;
-      document.getElementById("mute-btn").textContent = micOn ? "Mute" : "Unmute";
+      const btn = document.getElementById("mute-btn");
+      btn.classList.toggle("off", !micOn);
+      btn.classList.toggle("on", micOn);
+      showToast(micOn ? "Unmuted" : "Muted");
     };
 
     document.getElementById("camera-btn").onclick = () => {
       camOn = !camOn;
       localStream.getVideoTracks()[0].enabled = camOn;
-      document.getElementById("camera-btn").textContent = camOn ? "Hide Camera" : "Show Camera";
+      const btn = document.getElementById("camera-btn");
+      btn.classList.toggle("off", !camOn);
+      btn.classList.toggle("on", camOn);
+      showToast(camOn ? "Cam On" : "Cam Off");
+    };
+
+    document.getElementById("flip-btn").onclick = async () => {
+      try {
+        const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+        const idx = cams.findIndex(c => c.deviceId === currentCamId);
+        currentCamId = cams[(idx + 1) % cams.length].deviceId;
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: currentCamId } },
+          audio: true
+        });
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = stream;
+        localStream.getAudioTracks()[0].enabled = micOn;
+        localStream.getVideoTracks()[0].enabled = camOn;
+        containers[userName].srcObject = stream;
+        Object.values(peers).forEach(pc => {
+          const videoSender = pc.getSenders().find(s => s.track.kind === 'video');
+          if (videoSender) videoSender.replaceTrack(localStream.getVideoTracks()[0]);
+          const audioSender = pc.getSenders().find(s => s.track.kind === 'audio');
+          if (audioSender) audioSender.replaceTrack(localStream.getAudioTracks()[0]);
+        });
+        showToast("Camera switched");
+      } catch (err) {
+        console.error("Flip camera error:", err);
+        showToast("Failed to switch camera");
+      }
+    };
+
+    document.getElementById("share-btn").onclick = () => {
+      const btn = document.getElementById("share-btn");
+      const shareText = btn.querySelector(".share-text");
+      const link = `${window.location.origin}${window.location.pathname}?id=${roomId}`;
+      navigator.clipboard.writeText(link).then(() => {
+        shareText.textContent = "Copied!";
+        showToast("Link copied!");
+        setTimeout(() => shareText.textContent = "Share", 2000);
+      }).catch(err => {
+        console.error("Failed to copy link:", err);
+        showToast("Failed to copy link");
+      });
+    };
+
+    document.getElementById("leave-btn").onclick = () => {
+      localStream?.getTracks().forEach(t => t.stop());
+      Object.values(peers).forEach(pc => pc.close());
+      ws.close();
+      window.location.href = "index.html";
     };
   </script>
 </body>
