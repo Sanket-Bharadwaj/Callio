@@ -6,28 +6,16 @@
   <title>Callio – Voice-first calling</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
   <style>
+    /* Same styles as before for clean theme, buttons, etc. */
     :root {
-      --bg: #f9f9f9;
-      --text: #1a1a1a;
-      --secondary: #6b7280;
-      --border: #e5e7eb;
-      --accent: #2563eb;
+      --bg: #f9f9f9; --text: #1a1a1a; --secondary: #6b7280;
+      --border: #e5e7eb; --accent: #2563eb;
     }
-
     [data-theme="dark"] {
-      --bg: #0f172a;
-      --text: #f8fafc;
-      --secondary: #94a3b8;
-      --border: #334155;
-      --accent: #3b82f6;
+      --bg: #0f172a; --text: #f8fafc; --secondary: #94a3b8;
+      --border: #334155; --accent: #3b82f6;
     }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Inter', sans-serif;
       background: var(--bg);
@@ -39,65 +27,27 @@
       padding: 2rem;
       transition: background 0.2s ease, color 0.2s ease;
     }
-
-    .container {
-      max-width: 400px;
-      width: 100%;
-    }
-
-    h1 {
-      font-size: 2.25rem;
-      font-weight: 600;
-      text-align: center;
-      margin-bottom: 0.5rem;
-    }
-
-    p {
-      text-align: center;
-      color: var(--secondary);
-      margin-bottom: 2rem;
-    }
-
+    .container { max-width: 400px; width: 100%; }
+    h1 { font-size: 2.25rem; font-weight: 600; text-align: center; margin-bottom: 0.5rem; }
+    p { text-align: center; color: var(--secondary); margin-bottom: 2rem; }
     .btn {
-      width: 100%;
-      padding: 1rem;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 500;
-      cursor: pointer;
-      background: var(--accent);
-      color: white;
-      margin-bottom: 1rem;
+      width: 100%; padding: 1rem; border: none; border-radius: 8px;
+      font-size: 1rem; font-weight: 500; cursor: pointer;
+      background: var(--accent); color: white; margin-bottom: 1rem;
     }
-
     .input {
-      width: 100%;
-      padding: 1rem;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-size: 1rem;
-      margin-bottom: 1rem;
-      background: var(--bg);
-      color: var(--text);
+      width: 100%; padding: 1rem; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 1rem; margin-bottom: 1rem;
+      background: var(--bg); color: var(--text);
     }
-
     .divider {
-      text-align: center;
-      color: var(--secondary);
-      margin: 1rem 0;
+      text-align: center; color: var(--secondary); margin: 1rem 0;
     }
-
     .toggle {
-      position: fixed;
-      bottom: 16px;
-      left: 16px;
-      background: var(--bg);
-      color: var(--secondary);
-      border: 1px solid var(--border);
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
+      position: fixed; bottom: 16px; left: 16px;
+      background: var(--bg); color: var(--secondary);
+      border: 1px solid var(--border); padding: 8px 12px;
+      border-radius: 6px; cursor: pointer;
     }
   </style>
 </head>
@@ -107,9 +57,7 @@
     <p>Voice-first calling made simple.</p>
 
     <button class="btn" id="create-btn">Create a Call</button>
-
     <div class="divider">or</div>
-
     <input type="text" id="room-code" class="input" placeholder="Enter call code" />
     <button class="btn" id="join-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text);">Join Call</button>
   </div>
@@ -117,16 +65,14 @@
   <button class="toggle" id="theme-toggle">🌙</button>
 
   <script>
-    // Theme toggle
     const themeToggle = document.getElementById('theme-toggle');
-    const isDark = localStorage.getItem('theme') === 'dark';
-    if (isDark) {
+    if (localStorage.getItem('theme') === 'dark') {
       document.body.setAttribute('data-theme', 'dark');
       themeToggle.textContent = '☀️';
     }
 
     themeToggle.onclick = () => {
-      const dark = document.body.getAttribute('data-theme') === 'dark';
+      const dark = document.body.setAttribute('data-theme') === 'dark';
       if (dark) {
         document.body.removeAttribute('data-theme');
         localStorage.setItem('theme', 'light');
@@ -138,37 +84,29 @@
       }
     };
 
-    // Prompt for name
-    function askNameAndJoin(roomId) {
+    function goToRoom(roomId, isCreator) {
       const name = prompt("Enter your name:");
       if (!name) return;
       localStorage.setItem('userName', name);
-      localStorage.setItem('isCreator', 'false');
+      localStorage.setItem('isCreator', isCreator ? 'true' : 'false');
       window.location.href = `room.html?id=${roomId}`;
     }
 
-    // Create call
     document.getElementById('create-btn').onclick = () => {
       const roomId = Math.random().toString(36).substr(2, 6).toUpperCase();
-      const name = prompt("Enter your name:");
-      if (!name) return;
-      localStorage.setItem('userName', name);
-      localStorage.setItem('isCreator', 'true');
-      window.location.href = `room.html?id=${roomId}`;
+      goToRoom(roomId, true);
     };
 
-    // Join call
     document.getElementById('join-btn').onclick = () => {
-      const roomId = document.getElementById('room-code').value.trim().toUpperCase();
-      if (roomId.length < 3) {
+      const code = document.getElementById('room-code').value.trim().toUpperCase();
+      if (code.length < 3) {
         alert("Enter a valid room code");
         return;
       }
-      askNameAndJoin(roomId);
+      goToRoom(code, false);
     };
 
-    // Enter key support
-    document.getElementById('room-code').addEventListener('keypress', (e) => {
+    document.getElementById('room-code').addEventListener('keypress', e => {
       if (e.key === 'Enter') document.getElementById('join-btn').click();
     });
   </script>
