@@ -48,7 +48,7 @@
     <div id="controls" class="bg-gray-800 p-4 flex justify-center space-x-4">
         <button id="toggleMic" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full" title="Toggle Microphone">
             <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m0 0v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
             </svg>
         </button>
         <button id="toggleCamera" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full" title="Toggle Camera">
@@ -86,14 +86,17 @@
 
         const params = new URLSearchParams(window.location.search);
         const roomId = params.get('id');
-        const username = params.get('user');
-        if (!roomId || !username || !/^\d{6}$/.test(roomId)) {
+        const username = params.get('user') ? params.get('user').replace(/[<>&"]/g, '') : 'Anonymous'; // Sanitize username
+        if (!roomId || !/^\d{6}$/.test(roomId)) {
             window.location.href = 'index.html';
         }
 
         document.getElementById('localUsername').textContent = username;
 
-        const ws = new WebSocket('wss://callio.onrender.com');
+        // Dynamic WebSocket URL
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsHost = window.location.hostname === 'localhost' ? 'localhost:3000' : 'callio.onrender.com';
+        const ws = new WebSocket(`${wsProtocol}//${wsHost}`);
         const peers = new Map();
         let localStream = null;
         const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
@@ -102,6 +105,10 @@
         let currentFacingMode = 'user';
         let permissionRetryCount = 0;
         const MAX_RETRIES = 2;
+        let localPeerId = null; // Store local peer ID
+        let wsReconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 5;
+        const RECONNECT_INTERVAL = 2000;
 
         const localVideo = document.getElementById('localVideo');
         const videoContainer = document.getElementById('videoContainer');
@@ -129,13 +136,14 @@
                 });
                 localVideo.srcObject = localStream;
                 showToast('Local stream started');
+                setupTrackHandlers();
                 checkPeerCount();
             } catch (err) {
                 console.error('Error accessing media devices:', err);
                 if (err.name === 'NotAllowedError') {
                     if (permissionRetryCount < MAX_RETRIES) {
                         permissionRetryCount++;
-                        showToast('Camera/mic access denied. Please grant permissions and try again.');
+                        showToast('Camera/mic access denied. Retrying...');
                         setTimeout(getLocalStream, 2000);
                     } else {
                         showToast('Camera/mic access denied. Falling back to audio-only.');
@@ -153,12 +161,24 @@
         async function tryAudioOnly() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localVideo.srcObject = null; // Clear video
                 showToast('Video unavailable, using audio only');
+                setupTrackHandlers();
                 checkPeerCount();
             } catch (audioErr) {
                 console.error('Error accessing audio:', audioErr);
                 showToast('Failed to access audio. Please check permissions and devices.');
             }
+        }
+
+        function setupTrackHandlers() {
+            localStream?.getTracks().forEach(track => {
+                track.onended = () => {
+                    showToast(`${track.kind} track ended. Please check your device.`);
+                    cleanup();
+                    getLocalStream();
+                };
+            });
         }
 
         function checkPeerCount() {
@@ -168,6 +188,10 @@
         }
 
         function createPeerConnection(peerId) {
+            if (peers.has(peerId)) {
+                console.warn(`Peer connection for ${peerId} already exists`);
+                return peers.get(peerId).pc;
+            }
             const pc = new RTCPeerConnection({ iceServers });
             pc.onicecandidate = ({ candidate }) => {
                 if (candidate) {
@@ -189,14 +213,52 @@
                 container.id = `peer-${peerId}`;
                 const usernameLabel = document.createElement('p');
                 usernameLabel.className = 'text-center text-sm mt-1';
-                usernameLabel.textContent = peers.get(peerId).username;
+                usernameLabel.textContent = peers.get(peerId)?.username || 'Unknown';
                 container.appendChild(video);
                 container.appendChild(usernameLabel);
                 videoContainer.appendChild(container);
             };
+            pc.onconnectionstatechange = () => {
+                if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+                    removePeer(peerId);
+                }
+            };
             localStream?.getTracks().forEach(track => pc.addTrack(track, localStream));
-            peers.set(peerId, { pc, username: '' });
+            peers.set(peerId, { pc, username: peers.get(peerId)?.username || 'Unknown' });
             return pc;
+        }
+
+        function removePeer(peerId) {
+            const peer = peers.get(peerId);
+            if (peer) {
+                peer.pc.close();
+                peers.delete(peerId);
+                const container = document.getElementById(`peer-${peerId}`);
+                if (container) container.remove();
+                showToast(`Peer ${peer.username || peerId} left the room`);
+            }
+        }
+
+        function reconnectWebSocket() {
+            if (wsReconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                showToast('Failed to reconnect to server. Please refresh the page.');
+                return;
+            }
+            wsReconnectAttempts++;
+            showToast(`Reconnecting to server... (Attempt ${wsReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+            const newWs = new WebSocket(`${wsProtocol}//${wsHost}`);
+            newWs.onopen = () => {
+                wsReconnectAttempts = 0;
+                ws.send(JSON.stringify({ type: 'join', roomId, payload: { username, peerId: localPeerId } }));
+                showToast(`Reconnected to room ${roomId}`);
+            };
+            newWs.onmessage = ws.onmessage;
+            newWs.onclose = ws.onclose;
+            newWs.onerror = ws.onerror;
+            ws = newWs;
+            setTimeout(() => {
+                if (ws.readyState !== WebSocket.OPEN) reconnectWebSocket();
+            }, RECONNECT_INTERVAL * Math.pow(2, wsReconnectAttempts));
         }
 
         ws.onopen = () => {
@@ -207,15 +269,23 @@
         ws.onmessage = async (event) => {
             try {
                 const data = JSON.parse(event.data);
+                if (!data || !data.type || !data.payload) {
+                    console.warn('Invalid WebSocket message format');
+                    return;
+                }
                 const { type, payload } = data;
 
                 if (type === 'signal') {
                     const { type: signalType, peerId, candidate, offer, answer, username: remoteUsername, emoji } = payload;
+                    if (!peerId) {
+                        console.warn('Missing peerId in signal');
+                        return;
+                    }
 
                     if (signalType === 'offer') {
                         const pc = createPeerConnection(peerId);
                         if (!pc) return;
-                        peers.get(peerId).username = remoteUsername;
+                        peers.get(peerId).username = remoteUsername?.replace(/[<>&"]/g, '') || 'Unknown';
                         await pc.setRemoteDescription(new RTCSessionDescription(offer));
                         const answer = await pc.createAnswer();
                         await pc.setLocalDescription(answer);
@@ -229,11 +299,11 @@
                         if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
                     } else if (signalType === 'ice-candidate') {
                         const pc = peers.get(peerId)?.pc;
-                        if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                        if (pc && candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate));
                     } else if (signalType === 'new-peer') {
                         const pc = createPeerConnection(peerId);
                         if (!pc) return;
-                        peers.get(peerId).username = remoteUsername;
+                        peers.get(peerId).username = remoteUsername?.replace(/[<>&"]/g, '') || 'Unknown';
                         const offer = await pc.createOffer();
                         await pc.setLocalDescription(offer);
                         ws.send(JSON.stringify({
@@ -243,14 +313,18 @@
                         }));
                     } else if (signalType === 'emoji') {
                         const container = document.getElementById(`peer-${peerId}`);
-                        if (container) {
+                        if (container && emoji) {
                             const emojiDiv = document.createElement('div');
                             emojiDiv.className = 'emoji-overlay absolute top-1/2 left-1/2 transform -translate-x-1/2';
                             emojiDiv.textContent = emoji;
                             container.appendChild(emojiDiv);
                             setTimeout(() => emojiDiv.remove(), 2000);
                         }
+                    } else if (signalType === 'peer-left') {
+                        removePeer(peerId);
                     }
+                } else if (type === 'assign-peer-id') {
+                    localPeerId = payload.peerId;
                 }
             } catch (err) {
                 console.error('Error processing WebSocket message:', err);
@@ -259,22 +333,31 @@
         };
 
         ws.onclose = () => {
-            showToast('Disconnected from server');
+            showToast('Disconnected from server, attempting to reconnect...');
             cleanup();
+            reconnectWebSocket();
         };
 
         ws.onerror = (err) => {
             console.error('WebSocket error:', err);
-            showToast('Connection error, please refresh');
+            showToast('Connection error, attempting to reconnect...');
         };
+
+        // WebSocket connection timeout
+        setTimeout(() => {
+            if (ws.readyState !== WebSocket.OPEN) {
+                showToast('Failed to connect to server, attempting to reconnect...');
+                reconnectWebSocket();
+            }
+        }, 5000);
 
         toggleMic.addEventListener('click', () => {
             if (!localStream) return;
             isMicOn = !isMicOn;
             localStream.getAudioTracks().forEach(track => (track.enabled = isMicOn));
             toggleMic.innerHTML = isMicOn
-                ? `<svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>`
-                : `<svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3zM5 5l14 14"></path></svg>`;
+                ? `<svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m0 0v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>`
+                : `<svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m0 0v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3zM5 5l14 14"></path></svg>`;
             showToast(isMicOn ? 'Microphone on' : 'Microphone off');
         });
 
@@ -302,13 +385,14 @@
                 localStream.addTrack(newVideoTrack);
                 localVideo.srcObject = localStream;
                 for (const peer of peers.values()) {
-                    const sender = peer.pc.getSenders().find(s => s.track.kind === 'video');
+                    const sender = peer.pc.getSenders().find(s => s.track?.kind === 'video');
                     if (sender) await sender.replaceTrack(newVideoTrack);
                 }
                 showToast(`Camera flipped to ${currentFacingMode}`);
+                setupTrackHandlers();
             } catch (err) {
                 console.error('Error flipping camera:', err);
-                showToast('Failed to flip camera, check permissions');
+                showToast('Failed to flip camera, check permissions or device availability');
             }
         });
 
@@ -318,13 +402,13 @@
             ws.send(JSON.stringify({
                 type: 'signal',
                 roomId,
-                payload: { type: 'emoji', emoji }
+                payload: { type: 'emoji', emoji, peerId: localPeerId }
             }));
             showToast(`Sent emoji ${emoji}`);
         });
 
         shareRoom.addEventListener('click', () => {
-            const url = `https://callioo.vercel.app/room.html?id=${encodeURIComponent(roomId)}`;
+            const url = `${window.location.origin}/room.html?id=${encodeURIComponent(roomId)}`;
             navigator.clipboard.writeText(url);
             showToast('Room link copied to clipboard');
         });
@@ -338,8 +422,9 @@
             localStream?.getTracks().forEach(track => track.stop());
             peers.forEach(({ pc }) => pc.close());
             peers.clear();
-            videoContainer.innerHTML = '';
-            videoContainer.appendChild(document.getElementById('localVideoContainer'));
+            // Remove only remote video containers
+            const remoteContainers = videoContainer.querySelectorAll('div:not(#localVideoContainer)');
+            remoteContainers.forEach(container => container.remove());
             ws.close();
         }
 
