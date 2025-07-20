@@ -703,6 +703,34 @@
             e.preventDefault();
             showEndCallModal();
         });
+    const roomId = callId;
+    const socket = new WebSocket('wss://callio.onrender.com');
+
+    socket.addEventListener('open', () => {
+        console.log('WebSocket connected');
+        socket.send(JSON.stringify({ type: 'join', roomId }));
+    });
+
+    socket.addEventListener('message', async (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'offer') {
+            // Handle receiving offer
+        } else if (data.type === 'answer') {
+            // Handle receiving answer
+        } else if (data.type === 'candidate') {
+            // Handle receiving ICE candidate
+        }
+    });
+
+    // Later in your peer connection setup:
+    function sendSignal(message) {
+        socket.send(JSON.stringify({
+            type: 'signal',
+            roomId,
+            payload: message
+        }));
+    }
     </script>
 </body>
 </html>
