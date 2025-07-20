@@ -30,6 +30,16 @@
             <label for="roomId" class="block text-sm font-medium mb-2">Room ID</label>
             <input id="roomId" type="text" class="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter or generate 6-digit room ID" value="" />
         </div>
+        <div class="mb-4 space-y-2">
+            <label class="flex items-center">
+                <input type="checkbox" id="micEnabled" checked class="mr-2">
+                <span>Mic On</span>
+            </label>
+            <label class="flex items-center">
+                <input type="checkbox" id="camEnabled" checked class="mr-2">
+                <span>Camera On</span>
+            </label>
+        </div>
         <button id="generateRoom" class="w-full p-2 bg-blue-600 hover:bg-blue-700 rounded-md mb-4">Generate Room ID</button>
         <button id="joinRoom" class="w-full p-2 bg-green-600 hover:bg-green-700 rounded-md" disabled>Join Room</button>
     </div>
@@ -38,9 +48,11 @@
         const roomIdInput = document.getElementById('roomId');
         const generateRoomButton = document.getElementById('generateRoom');
         const joinRoomButton = document.getElementById('joinRoom');
+        const micEnabled = document.getElementById('micEnabled');
+        const camEnabled = document.getElementById('camEnabled');
 
         function generateRoomId() {
-            return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit number
+            return Math.floor(100000 + Math.random() * 900000).toString();
         }
 
         function validateInputs() {
@@ -60,7 +72,13 @@
             const username = usernameInput.value.trim();
             const roomId = roomIdInput.value.trim();
             if (username && /^\d{6}$/.test(roomId)) {
-                window.location.href = `room.html?id=${encodeURIComponent(roomId)}&user=${encodeURIComponent(username)}`;
+                const params = new URLSearchParams({
+                    id: roomId,
+                    user: username,
+                    mic: micEnabled.checked,
+                    cam: camEnabled.checked
+                }).toString();
+                window.location.href = `room.html?${params}`;
             }
         });
 
