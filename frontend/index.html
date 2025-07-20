@@ -2,113 +2,118 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Callio – Voice-first calling</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Callio</title>
   <style>
-    /* Same styles as before for clean theme, buttons, etc. */
     :root {
-      --bg: #f9f9f9; --text: #1a1a1a; --secondary: #6b7280;
-      --border: #e5e7eb; --accent: #2563eb;
+      --bg: #0f172a;
+      --fg: #1e293b;
+      --text: #f8fafc;
+      --muted: #64748b;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
     }
-    [data-theme="dark"] {
-      --bg: #0f172a; --text: #f8fafc; --secondary: #94a3b8;
-      --border: #334155; --accent: #3b82f6;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: 'Inter', sans-serif;
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 1rem;
+    }
+
+    .container {
+      background: var(--fg);
+      padding: 2rem;
+      border-radius: 12px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+
+    p {
+      text-align: center;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.8rem;
+      margin-bottom: 1rem;
+      border-radius: 8px;
+      border: 1px solid #334155;
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 2rem;
-      transition: background 0.2s ease, color 0.2s ease;
+      font-size: 1rem;
     }
-    .container { max-width: 400px; width: 100%; }
-    h1 { font-size: 2.25rem; font-weight: 600; text-align: center; margin-bottom: 0.5rem; }
-    p { text-align: center; color: var(--secondary); margin-bottom: 2rem; }
-    .btn {
-      width: 100%; padding: 1rem; border: none; border-radius: 8px;
-      font-size: 1rem; font-weight: 500; cursor: pointer;
-      background: var(--accent); color: white; margin-bottom: 1rem;
+
+    button {
+      width: 100%;
+      padding: 0.8rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
     }
-    .input {
-      width: 100%; padding: 1rem; border: 1px solid var(--border);
-      border-radius: 8px; font-size: 1rem; margin-bottom: 1rem;
-      background: var(--bg); color: var(--text);
+
+    button:hover {
+      background: var(--accent-hover);
     }
-    .divider {
-      text-align: center; color: var(--secondary); margin: 1rem 0;
-    }
-    .toggle {
-      position: fixed; bottom: 16px; left: 16px;
-      background: var(--bg); color: var(--secondary);
-      border: 1px solid var(--border); padding: 8px 12px;
-      border-radius: 6px; cursor: pointer;
+
+    .or {
+      text-align: center;
+      margin: 1rem 0;
+      color: var(--muted);
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Callio</h1>
-    <p>Voice-first calling made simple.</p>
+    <p>Voice-first calling made simple</p>
 
-    <button class="btn" id="create-btn">Create a Call</button>
-    <div class="divider">or</div>
-    <input type="text" id="room-code" class="input" placeholder="Enter call code" />
-    <button class="btn" id="join-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text);">Join Call</button>
+    <button id="create">Create Call</button>
+    <div class="or">or</div>
+    <input type="text" placeholder="Enter call code" id="code" />
+    <button id="join">Join Call</button>
   </div>
 
-  <button class="toggle" id="theme-toggle">🌙</button>
-
   <script>
-    const themeToggle = document.getElementById('theme-toggle');
-    if (localStorage.getItem('theme') === 'dark') {
-      document.body.setAttribute('data-theme', 'dark');
-      themeToggle.textContent = '☀️';
-    }
+    const create = document.getElementById('create');
+    const join = document.getElementById('join');
+    const code = document.getElementById('code');
 
-    themeToggle.onclick = () => {
-      const dark = document.body.setAttribute('data-theme') === 'dark';
-      if (dark) {
-        document.body.removeAttribute('data-theme');
-        localStorage.setItem('theme', 'light');
-        themeToggle.textContent = '🌙';
-      } else {
-        document.body.setAttribute('data-theme', 'dark');
-        localStorage.setItem('theme', 'dark');
-        themeToggle.textContent = '☀️';
-      }
-    };
-
-    function goToRoom(roomId, isCreator) {
+    function askNameAndGo(callId) {
       const name = prompt("Enter your name:");
       if (!name) return;
       localStorage.setItem('userName', name);
-      localStorage.setItem('isCreator', isCreator ? 'true' : 'false');
-      window.location.href = `room.html?id=${roomId}`;
+      window.location.href = `room.html?id=${callId}`;
     }
 
-    document.getElementById('create-btn').onclick = () => {
-      const roomId = Math.random().toString(36).substr(2, 6).toUpperCase();
-      goToRoom(roomId, true);
+    create.onclick = () => {
+      const callId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      askNameAndGo(callId);
     };
 
-    document.getElementById('join-btn').onclick = () => {
-      const code = document.getElementById('room-code').value.trim().toUpperCase();
-      if (code.length < 3) {
-        alert("Enter a valid room code");
-        return;
-      }
-      goToRoom(code, false);
+    join.onclick = () => {
+      const callId = code.value.trim();
+      if (callId) askNameAndGo(callId);
     };
-
-    document.getElementById('room-code').addEventListener('keypress', e => {
-      if (e.key === 'Enter') document.getElementById('join-btn').click();
-    });
   </script>
 </body>
 </html>
