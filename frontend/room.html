@@ -10,94 +10,131 @@
       --card-color: #1e293b;
       --text-color: #f1f5f9;
       --accent-color: #3b82f6;
+      --accent-hover: #2563eb;
       --border-color: #334155;
     }
     body {
       background: var(--bg-color);
       color: var(--text-color);
-      font-family: Inter, sans-serif;
+      font-family: 'Inter', sans-serif;
       margin: 0;
-      padding: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
     }
     header {
-      padding: 16px;
+      padding: 1rem 1.5rem;
+      background: var(--card-color);
       border-bottom: 1px solid var(--border-color);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: var(--card-color);
     }
     h2 {
+      font-size: 1rem;
       margin: 0;
-      font-size: 1.2rem;
+      font-weight: 500;
     }
     #room-code {
       color: var(--accent-color);
-      font-weight: 500;
+      font-weight: bold;
+      font-size: 1rem;
     }
-    .main {
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-      gap: 20px;
-      align-items: center;
-      justify-content: center;
-    }
-    video {
-      width: 100%;
-      max-width: 480px;
-      border-radius: 12px;
-      border: 2px solid var(--border-color);
-      background: #000;
-    }
-    .controls {
-      display: flex;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    button {
-      padding: 10px 16px;
-      border-radius: 8px;
+    #share-btn {
+      padding: 0.5rem 1rem;
       background: var(--accent-color);
       color: white;
       border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
       cursor: pointer;
-      font-weight: 500;
-      font-size: 14px;
     }
-    button:hover {
-      background: #2563eb;
+    #share-btn:hover {
+      background: var(--accent-hover);
+    }
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.5rem;
+      gap: 1.5rem;
+    }
+    .video-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 100%;
+      width: 100%;
+      gap: 0.5rem;
+    }
+    video {
+      width: 100%;
+      max-width: 500px;
+      border-radius: 12px;
+      border: 2px solid var(--border-color);
+      background: black;
+      aspect-ratio: 16 / 9;
     }
     .user-tag {
-      text-align: center;
-      font-size: 0.9rem;
-      margin-top: 4px;
+      font-size: 0.875rem;
       color: #94a3b8;
+      text-align: center;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    button.control {
+      background: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.9rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button.control:hover {
+      background: var(--accent-hover);
+    }
+
+    @media (min-width: 768px) {
+      .main {
+        flex-direction: row;
+        justify-content: space-around;
+        align-items: flex-start;
+      }
+      .video-container {
+        width: 45%;
+      }
     }
   </style>
 </head>
 <body>
   <header>
-    <h2>Call Room: <span id="room-code"></span></h2>
+    <h2>Room Code: <span id="room-code"></span></h2>
     <button id="share-btn">Share</button>
   </header>
 
   <section class="main">
-    <div>
+    <div class="video-container">
       <video id="local-video" autoplay muted playsinline></video>
-      <div class="user-tag" id="local-name"></div>
+      <div class="user-tag" id="local-name">You</div>
     </div>
 
-    <div>
+    <div class="video-container">
       <video id="remote-video" autoplay playsinline></video>
-      <div class="user-tag" id="remote-name"></div>
-    </div>
-
-    <div class="controls">
-      <button id="mute-btn">Mute</button>
-      <button id="camera-btn">Hide Camera</button>
+      <div class="user-tag" id="remote-name">Connected User</div>
     </div>
   </section>
+
+  <div class="controls">
+    <button id="mute-btn" class="control">Mute</button>
+    <button id="camera-btn" class="control">Hide Camera</button>
+  </div>
 
   <script>
     const signalingServer = "wss://callio.onrender.com";
@@ -112,7 +149,7 @@
     document.getElementById("share-btn").onclick = () => {
       const link = `${window.location.origin}${window.location.pathname}?id=${roomId}`;
       navigator.clipboard.writeText(link).then(() => {
-        alert("Room link copied to clipboard:\n" + link);
+        alert("Room link copied:\n" + link);
       });
     };
 
@@ -127,7 +164,6 @@
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
       localStream = stream;
       localVideo.srcObject = stream;
-
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
     });
 
