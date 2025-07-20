@@ -1,188 +1,189 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Callio Room</title>
   <style>
     :root {
-      --bg: #f9f9f9;
-      --text: #111;
-      --accent: #2563eb;
-      --border: #ddd;
-      --muted: #888;
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --accent: #3b82f6;
+      --muted: #64748b;
     }
+
     body {
-      font-family: sans-serif;
+      margin: 0;
       background: var(--bg);
       color: var(--text);
-      margin: 0;
-      padding: 0;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+      min-height: 100vh;
     }
+
+    h2 {
+      margin-bottom: 1rem;
+    }
+
     .room {
       display: flex;
       flex-wrap: wrap;
-      justify-content: center;
       gap: 1rem;
-      padding: 2rem;
+      justify-content: center;
+      width: 100%;
     }
-    .user-card {
-      width: 160px;
-      height: 200px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+
+    .user {
+      width: 140px;
+      height: 160px;
+      background: var(--card);
+      border-radius: 10px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      position: relative;
-      border: 1px solid var(--border);
+      color: var(--text);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
-    .user-card video {
-      width: 100%;
-      height: auto;
-      border-radius: 12px;
-      display: block;
-    }
+
     .avatar {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
+      width: 60px;
+      height: 60px;
       background: var(--accent);
-      color: white;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: bold;
       font-size: 1.5rem;
-      margin-bottom: 8px;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
     }
+
     .name {
-      font-size: 1rem;
-      color: var(--text);
-      font-weight: 500;
+      font-size: 0.9rem;
       text-align: center;
     }
   </style>
 </head>
 <body>
+  <h2>Call Room</h2>
+  <div class="room" id="room"></div>
 
-<div class="room" id="room"></div>
+  <script>
+    const SIGNAL_SERVER = "wss://callio.onrender.com";
+    const roomId = new URLSearchParams(location.search).get("id");
+    const userName = localStorage.getItem("userName") || "Guest";
+    const room = document.getElementById("room");
 
-<script>
-  const SIGNAL_SERVER = "wss://callio.onrender.com";
-  const roomId = new URLSearchParams(window.location.search).get("id");
-  const userName = localStorage.getItem("userName") || "Guest";
+    const socket = new WebSocket(SIGNAL_SERVER);
+    const peers = {};
 
-  const socket = new WebSocket(SIGNAL_SERVER);
-  const peers = {};
-  const localStreamPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const localStreamPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: false });
 
-  const roomEl = document.getElementById("room");
+    const addUserCard = (name, stream = null, isSelf = false) => {
+      const existing = document.getElementById("user-" + name);
+      if (existing) existing.remove();
 
-  const createCard = (name, stream = null, isSelf = false) => {
-    const card = document.createElement("div");
-    card.className = "user-card";
-    card.id = `user-${name}`;
+      const div = document.createElement("div");
+      div.className = "user";
+      div.id = "user-" + name;
 
-    if (stream && stream.getVideoTracks().length > 0) {
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      video.autoplay = true;
-      video.playsInline = true;
-      video.muted = isSelf;
-      card.appendChild(video);
-    } else {
+      if (stream) {
+        const audio = document.createElement("audio");
+        audio.srcObject = stream;
+        audio.autoplay = true;
+        audio.muted = isSelf;
+        div.appendChild(audio);
+      }
+
       const avatar = document.createElement("div");
       avatar.className = "avatar";
       avatar.textContent = name[0]?.toUpperCase() || "?";
-      card.appendChild(avatar);
-    }
+      div.appendChild(avatar);
 
-    const label = document.createElement("div");
-    label.className = "name";
-    label.textContent = name + (isSelf ? " (You)" : "");
-    card.appendChild(label);
+      const label = document.createElement("div");
+      label.className = "name";
+      label.textContent = name + (isSelf ? " (You)" : "");
+      div.appendChild(label);
 
-    return card;
-  };
+      room.appendChild(div);
+    };
 
-  function addOrUpdateCard(name, stream, isSelf) {
-    const existing = document.getElementById(`user-${name}`);
-    if (existing) roomEl.removeChild(existing);
-    roomEl.appendChild(createCard(name, stream, isSelf));
-  }
+    socket.onopen = async () => {
+      const localStream = await localStreamPromise;
+      addUserCard(userName, localStream, true);
 
-  socket.onopen = async () => {
-    const stream = await localStreamPromise;
-    addOrUpdateCard(userName, stream, true);
-    socket.send(JSON.stringify({ type: "join", roomId, name: userName }));
+      socket.send(JSON.stringify({ type: "join", roomId, name: userName }));
 
-    socket.onmessage = async (event) => {
-      const data = JSON.parse(event.data);
+      socket.onmessage = async (msg) => {
+        const data = JSON.parse(msg.data);
+        if (data.type === "joined" && data.name !== userName) {
+          const pc = createPeer(data.name);
+          peers[data.name] = pc;
 
-      if (data.type === "signal" && data.from && data.payload) {
-        let pc = peers[data.from];
-        if (!pc) {
-          pc = createPeer(data.from, false);
-          peers[data.from] = pc;
-        }
-        await pc.setRemoteDescription(data.payload);
-        if (data.payload.type === "offer") {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
           socket.send(JSON.stringify({
             type: "signal",
-            roomId,
             from: userName,
-            to: data.from,
-            payload: pc.localDescription,
+            to: data.name,
+            roomId,
+            payload: pc.localDescription
           }));
         }
-      } else if (data.type === "joined" && data.name !== userName) {
-        const pc = createPeer(data.name, true);
-        peers[data.name] = pc;
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.send(JSON.stringify({
-          type: "signal",
-          roomId,
-          from: userName,
-          to: data.name,
-          payload: pc.localDescription,
-        }));
-      }
-    };
-  };
 
-  function createPeer(remoteName, isInitiator) {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+        if (data.type === "signal" && data.to === userName) {
+          let pc = peers[data.from];
+          if (!pc) {
+            pc = createPeer(data.from);
+            peers[data.from] = pc;
+          }
+          await pc.setRemoteDescription(new RTCSessionDescription(data.payload));
 
-    localStreamPromise.then(stream => {
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
-    });
-
-    pc.onicecandidate = e => {
-      if (e.candidate) {
-        socket.send(JSON.stringify({
-          type: "signal",
-          roomId,
-          from: userName,
-          to: remoteName,
-          payload: { type: "candidate", candidate: e.candidate }
-        }));
-      }
+          if (data.payload.type === "offer") {
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.send(JSON.stringify({
+              type: "signal",
+              from: userName,
+              to: data.from,
+              roomId,
+              payload: pc.localDescription
+            }));
+          }
+        }
+      };
     };
 
-    pc.ontrack = e => {
-      const remoteStream = e.streams[0];
-      addOrUpdateCard(remoteName, remoteStream, false);
-    };
+    function createPeer(remoteName) {
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
 
-    return pc;
-  }
-</script>
+      localStreamPromise.then(stream => {
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      });
 
+      pc.ontrack = e => {
+        addUserCard(remoteName, e.streams[0], false);
+      };
+
+      pc.onicecandidate = e => {
+        if (e.candidate) {
+          socket.send(JSON.stringify({
+            type: "signal",
+            from: userName,
+            to: remoteName,
+            roomId,
+            payload: { type: "candidate", candidate: e.candidate }
+          }));
+        }
+      };
+
+      return pc;
+    }
+  </script>
 </body>
 </html>
