@@ -39,13 +39,13 @@
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col">
-    <div id="videoContainer" class="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 relative">
-        <div id="localVideoContainer" class="absolute bottom-4 right-4 w-40 h-24 bg-gray-800 rounded-lg overflow-hidden">
+    <div id="videoContainer" class="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 p-2 relative">
+        <div id="localVideoContainer" class="absolute bottom-4 right-4 w-32 h-20 bg-gray-800 rounded-lg overflow-hidden sm:w-40 sm:h-24">
             <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
             <p id="localUsername" class="text-center text-sm mt-1"></p>
         </div>
     </div>
-    <div id="controls" class="bg-gray-800 p-4 flex justify-center space-x-4">
+    <div id="controls" class="bg-gray-800 p-2 flex justify-center space-x-2 sm:space-x-4">
         <button id="toggleMic" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full" title="Toggle Microphone">
             <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
@@ -87,6 +87,8 @@
         const params = new URLSearchParams(window.location.search);
         const roomId = params.get('id');
         const username = params.get('user');
+        const initialMicEnabled = params.get('mic') === 'true';
+        const initialCamEnabled = params.get('cam') === 'true';
         if (!roomId || !username || !/^\d{6}$/.test(roomId)) {
             window.location.href = 'index.html';
         }
@@ -97,8 +99,8 @@
         const peers = new Map();
         let localStream = null;
         const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
-        let isMicOn = true;
-        let isCameraOn = true;
+        let isMicOn = initialMicEnabled;
+        let isCameraOn = initialCamEnabled;
         let currentFacingMode = 'user';
         let permissionRetryCount = 0;
         const MAX_RETRIES = 2;
@@ -121,13 +123,36 @@
             setTimeout(() => toast.remove(), 3000);
         }
 
+        async function setAudioOutputToSpeaker() {
+            if (localStream && 'setSinkId' in HTMLMediaElement.prototype) {
+                const audioTracks = localStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    try {
+                        const devices = await navigator.mediaDevices.enumerateDevices();
+                        const speaker = devices.find(d => d.kind === 'audiooutput' && d.label.toLowerCase().includes('speaker'));
+                        if (speaker) {
+                            await localVideo.setSinkId(speaker.deviceId);
+                            showToast('Audio set to speaker');
+                        } else {
+                            showToast('No speaker found, using default output');
+                        }
+                    } catch (err) {
+                        console.error('Error setting audio output:', err);
+                        showToast('Failed to set speaker output');
+                    }
+                }
+            }
+        }
+
         async function getLocalStream() {
+            if (localStream) return; // Prevent duplicate streams
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15 } },
-                    audio: true
+                    video: isCameraOn ? { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15 } } : false,
+                    audio: isMicOn
                 });
                 localVideo.srcObject = localStream;
+                await setAudioOutputToSpeaker();
                 showToast('Local stream started');
                 checkPeerCount();
             } catch (err) {
@@ -151,8 +176,11 @@
         }
 
         async function tryAudioOnly() {
+            if (localStream) return;
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localVideo.srcObject = null; // No video
+                await setAudioOutputToSpeaker();
                 showToast('Video unavailable, using audio only');
                 checkPeerCount();
             } catch (audioErr) {
@@ -168,6 +196,7 @@
         }
 
         function createPeerConnection(peerId) {
+            if (peers.has(peerId)) return null; // Prevent duplicate peer connections
             const pc = new RTCPeerConnection({ iceServers });
             pc.onicecandidate = ({ candidate }) => {
                 if (candidate) {
