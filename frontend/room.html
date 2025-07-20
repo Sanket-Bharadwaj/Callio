@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Callio - Room</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+  <div id="videoContainer" class="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 relative">
+    <div id="localVideoContainer" class="absolute bottom-4 right-4 w-40 h-24 bg-gray-800 rounded-lg overflow-hidden">
+      <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
+      <p id="localUsername" class="text-center text-sm mt-1"></p>
+    </div>
+  </div>
+  <div id="controls" class="bg-gray-800 p-4 flex justify-center space-x-4">
+    <button id="toggleMic" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full" title="Toggle Microphone">
+      <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m0 0v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+      </svg>
+    </button>
+    <button id="toggleCamera" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full" title="Toggle Camera">
+      <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+      </svg>
+    </button>
+    <button id="sendEmoji" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full" title="Send Emoji">
+      <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+    </button>
+    <button id="shareRoom" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full" title="Share Room">
+      <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C9.39 12.637 10.364 12.2 11.5 12.2c1.136 0 2.11.437 2.816 1.142M15 9h.01M9 9h.01M17 3a2 2 0 11-2.828 2.828L12 8.414 9.828 5.828A2 2 0 1112.656 3l2.172 2.586L17 3z"></path>
+      </svg>
+    </button>
+    <button id="leaveRoom" class="p-2 bg-red-600 hover:bg-red-700 rounded-full" title="Leave Room">
+      <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+      </svg>
+    </button>
+  </div>
+  <div id="toastContainer" class="fixed bottom-4 right-4 space-y-2"></div>
+  <script src="script.js"></script>
+</body>
+</html>
