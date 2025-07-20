@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Callio - Voice-First Calling</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Light theme */
+            --bg-primary: #f9f9f9;
+            --bg-secondary: #ffffff;
+            --text-primary: #1a1a1a;
+            --text-secondary: #6b7280;
+            --border-color: #e0e0e0;
+            --accent-color: #2563eb;
+            --accent-hover: #1d4ed8;
+            --button-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --button-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 0 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .tagline {
+            color: var(--text-secondary);
+            margin-bottom: 48px;
+            text-align: center;
+            font-size: 1rem;
+        }
+
+        .main-form {
+            width: 100%;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 32px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--button-shadow);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 16px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .input-field::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+            box-shadow: var(--button-shadow);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 24px 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+        }
+
+        .divider span {
+            padding: 0 16px;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+        }
+
+        .theme-toggle {
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border-color);
+        }
+
+        .theme-toggle:hover {
+            color: var(--text-primary);
+            transform: scale(1.05);
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                max-width: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="logo">Callio</h1>
+        <p class="tagline">Voice-first calling made simple</p>
+        
+        <div class="main-form">
+            <div class="form-group">
+                <button class="btn btn-primary" id="create-call">Create a Call</button>
+            </div>
+            
+            <div class="divider">
+                <span>or</span>
+            </div>
+            
+            <div class="form-group">
+                <input type="text" class="input-field" placeholder="Enter call code" id="call-code">
+            </div>
+            
+            <div class="form-group">
+                <button class="btn btn-secondary" id="join-call">Join Call</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <button class="theme-toggle" id="theme-toggle" title="Toggle theme">🌙</button>
+    </footer>
+
+    <script>
+        const themeToggle = document.getElementById('theme-toggle');
+        const body = document.body;
+        
+        // Check for saved theme preference or default to dark
+        const currentTheme = localStorage.getItem('theme') || 'dark';
+        
+        if (currentTheme === 'dark') {
+            body.setAttribute('data-theme', 'dark');
+            themeToggle.textContent = '☀️';
+        }
+        
+        themeToggle.addEventListener('click', () => {
+            const isDark = body.getAttribute('data-theme') === 'dark';
+            
+            if (isDark) {
+                body.removeAttribute('data-theme');
+                themeToggle.textContent = '🌙';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                themeToggle.textContent = '☀️';
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+
+        // Button functionality
+        document.getElementById('create-call').addEventListener('click', () => {
+            const callId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            localStorage.setItem('pendingCallId', callId);
+            localStorage.setItem('isCreator', 'true');
+            showNameModal();
+        });
+
+        document.getElementById('join-call').addEventListener('click', () => {
+            const callCode = document.getElementById('call-code').value.trim();
+            if (callCode) {
+                localStorage.setItem('pendingCallId', callCode);
+                localStorage.setItem('isCreator', 'false');
+                showNameModal();
+            }
+        });
+
+        // Name modal functionality
+        function showNameModal() {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.7);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+                padding: 20px;
+            `;
+            
+            const modalContent = document.createElement('div');
+            modalContent.style.cssText = `
+                background: var(--bg-secondary);
+                padding: 32px;
+                border-radius: 12px;
+                width: 100%;
+                max-width: 400px;
+                border: 1px solid var(--border-color);
+            `;
+            
+            modalContent.innerHTML = `
+                <h3 style="margin-bottom: 16px; font-size: 18px; font-weight: 600; color: var(--text-primary);">Enter your name</h3>
+                <input type="text" id="user-name" placeholder="Your name" style="width: 100%; padding: 16px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; background: var(--bg-primary); color: var(--text-primary); margin-bottom: 24px;" maxlength="30">
+                <div style="display: flex; gap: 12px;">
+                    <button id="cancel-modal" style="flex: 1; padding: 12px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); border-radius: 6px; cursor: pointer; font-size: 14px;">Cancel</button>
+                    <button id="join-with-name" style="flex: 1; padding: 12px; border: none; background: var(--accent-color); color: white; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">Join Call</button>
+                </div>
+            `;
+            
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+            
+            const nameInput = document.getElementById('user-name');
+            const joinBtn = document.getElementById('join-with-name');
+            const cancelBtn = document.getElementById('cancel-modal');
+            
+            nameInput.focus();
+            
+            function joinCall() {
+                const userName = nameInput.value.trim();
+                if (userName) {
+                    const callId = localStorage.getItem('pendingCallId');
+                    localStorage.setItem('userName', userName);
+                    window.location.href = `room.html?id=${callId}`;
+                }
+            }
+            
+            joinBtn.addEventListener('click', joinCall);
+            nameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') joinCall();
+            });
+            
+            cancelBtn.addEventListener('click', () => {
+                document.body.removeChild(modal);
+                localStorage.removeItem('pendingCallId');
+                localStorage.removeItem('isCreator');
+            });
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                    localStorage.removeItem('pendingCallId');
+                    localStorage.removeItem('isCreator');
+                }
+            });
+        }
+
+        // Enter key support for join
+        document.getElementById('call-code').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('join-call').click();
+            }
+        });
+    </script>
+</body>
+</html>

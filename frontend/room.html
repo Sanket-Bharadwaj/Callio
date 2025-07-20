@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Callio - Call Room</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Light theme */
+            --bg-primary: #f9f9f9;
+            --bg-secondary: #ffffff;
+            --text-primary: #1a1a1a;
+            --text-secondary: #6b7280;
+            --border-color: #e0e0e0;
+            --accent-color: #2563eb;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --warning-color: #f59e0b;
+            --control-bg: #ffffff;
+            --control-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --accent-color: #3b82f6;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --warning-color: #f59e0b;
+            --control-bg: #1e293b;
+            --control-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .call-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .call-header {
+            padding: 16px 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .call-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .call-id {
+            font-weight: 500;
+            font-size: 16px;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .theme-toggle {
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border-color);
+        }
+
+        .theme-toggle:hover {
+            color: var(--text-primary);
+            transform: scale(1.05);
+        }
+
+        /* Main call area */
+        .call-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            position: relative;
+        }
+
+        .participants-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            justify-content: center;
+            align-items: center;
+            max-width: 600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .participant {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .participant.local {
+            width: 100%;
+            max-width: 300px;
+            aspect-ratio: 4/3;
+        }
+
+        .participant.remote {
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 4/3;
+        }
+
+        .participant.audio-only {
+            aspect-ratio: 1;
+            max-width: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .participant video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .participant-avatar {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--accent-color), var(--success-color));
+            color: white;
+        }
+
+        .avatar-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .participant-name {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .participant-status {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .speaking-indicator {
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border: 3px solid var(--success-color);
+            border-radius: 14px;
+            animation: speaking 1s infinite;
+        }
+
+        @keyframes speaking {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        .muted-indicator {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 6px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        /* Controls */
+        .call-controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            background: var(--control-bg);
+            padding: 16px;
+            border-radius: 24px;
+            box-shadow: var(--control-shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .control-btn {
+            width: 56px;
+            height: 56px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .control-btn.mic {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .control-btn.mic.muted {
+            background: var(--error-color);
+        }
+
+        .control-btn.camera {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .control-btn.camera.off {
+            background: var(--text-secondary);
+        }
+
+        .control-btn.end-call {
+            background: var(--error-color);
+            color: white;
+            position: relative;
+        }
+
+        .control-btn.end-call::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border: 2px solid var(--error-color);
+            border-radius: 50%;
+            opacity: 0;
+            animation: pulse-ring 2s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { opacity: 0; transform: scale(0.8); }
+            50% { opacity: 0.3; transform: scale(1.1); }
+            100% { opacity: 0; transform: scale(1.3); }
+        }
+
+        .control-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .waiting-message {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 16px;
+            margin-top: 20px;
+        }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            padding: 32px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .modal-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .modal-message {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .modal-btn.secondary {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .modal-btn.secondary:hover {
+            background: var(--border-color);
+        }
+
+        .modal-btn.danger {
+            background: var(--error-color);
+            color: white;
+        }
+
+        .modal-btn.danger:hover {
+            background: #dc2626;
+            transform: translateY(-1px);
+        }
+        @media (min-width: 768px) {
+            .call-main {
+                padding: 40px;
+            }
+
+            .participants-container {
+                flex-direction: row;
+                justify-content: center;
+                align-items: center;
+                gap: 40px;
+                max-width: 1000px;
+            }
+
+            .participant.local {
+                max-width: 320px;
+            }
+
+            .participant.remote {
+                max-width: 480px;
+            }
+
+            .participant.audio-only {
+                max-width: 240px;
+            }
+
+            .avatar-circle {
+                width: 100px;
+                height: 100px;
+                font-size: 40px;
+            }
+
+            .call-controls {
+                bottom: 40px;
+                padding: 20px;
+                gap: 16px;
+            }
+
+            .control-btn {
+                width: 64px;
+                height: 64px;
+                font-size: 24px;
+            }
+        }
+
+        /* Desktop layout */
+    </style>
+</head>
+<body>
+    <div class="call-container">
+        <header class="call-header">
+            <div class="call-info">
+                <div class="call-id" id="call-id">Call • ABC123</div>
+                <div class="connection-status">
+                    <span class="status-dot"></span>
+                    <span>Connected</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="theme-toggle" id="theme-toggle" title="Toggle theme">☀️</button>
+            </div>
+        </header>
+
+        <main class="call-main">
+            <div class="participants-container">
+                <!-- Local participant -->
+                <div class="participant local audio-only" id="local-participant">
+                    <video id="local-video" style="display: none;" muted></video>
+                    <div class="participant-avatar" id="local-avatar">
+                        <div class="avatar-circle" id="local-avatar-text">You</div>
+                        <div class="participant-name" id="local-name">You</div>
+                        <div class="participant-status" id="local-status">Microphone on</div>
+                    </div>
+                    <div class="muted-indicator" id="local-muted" style="display: none;">🔇</div>
+                </div>
+
+                <!-- Remote participant -->
+                <div class="participant remote audio-only" id="remote-participant">
+                    <video id="remote-video" style="display: none;"></video>
+                    <div class="participant-avatar" id="remote-avatar">
+                        <div class="avatar-circle" id="remote-avatar-text">?</div>
+                        <div class="participant-name" id="remote-name">Waiting...</div>
+                        <div class="participant-status" id="remote-status">Waiting to connect...</div>
+                    </div>
+                    <div class="speaking-indicator" id="remote-speaking" style="display: none;"></div>
+                    <div class="muted-indicator" id="remote-muted" style="display: none;">🔇</div>
+                </div>
+            </div>
+
+            <div class="waiting-message" id="waiting-message">
+                Waiting for others to join...
+            </div>
+        </main>
+
+        <div class="call-controls">
+            <button class="control-btn mic" id="mic-toggle" title="Toggle microphone">
+                🎤
+            </button>
+            <button class="control-btn camera off" id="camera-toggle" title="Toggle camera">
+                📹
+            </button>
+            <button class="control-btn end-call" id="end-call" title="End call">
+                📞
+            </button>
+        </div>
+    </div>
+
+    <button class="theme-toggle" id="theme-toggle" title="Toggle theme">🌙</button>
+
+    <script>
+        // Theme management
+        const themeToggle = document.getElementById('theme-toggle');
+        const body = document.body;
+        
+        const currentTheme = localStorage.getItem('theme') || 'dark';
+        if (currentTheme === 'dark') {
+            body.setAttribute('data-theme', 'dark');
+            themeToggle.textContent = '☀️';
+        } else {
+            themeToggle.textContent = '🌙';
+        }
+        
+        themeToggle.addEventListener('click', () => {
+            const isDark = body.getAttribute('data-theme') === 'dark';
+            
+            if (isDark) {
+                body.removeAttribute('data-theme');
+                themeToggle.textContent = '🌙';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                themeToggle.textContent = '☀️';
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+
+        // Call state management
+        let isMicOn = true;
+        let isCameraOn = false;
+        let isConnected = false;
+
+        // Get user info from localStorage
+        const userName = localStorage.getItem('userName') || 'You';
+        const callId = new URLSearchParams(window.location.search).get('id') || 'ABC123';
+        
+        // Update UI with user info
+        document.getElementById('call-id').textContent = `Call • ${callId}`;
+        document.getElementById('local-name').textContent = userName;
+        document.getElementById('local-avatar-text').textContent = userName.charAt(0).toUpperCase();
+
+        // Control buttons
+        const micToggle = document.getElementById('mic-toggle');
+        const cameraToggle = document.getElementById('camera-toggle');
+        const endCallBtn = document.getElementById('end-call');
+
+        // Participants
+        const localParticipant = document.getElementById('local-participant');
+        const remoteParticipant = document.getElementById('remote-participant');
+        const localVideo = document.getElementById('local-video');
+        const remoteVideo = document.getElementById('remote-video');
+        const localAvatar = document.getElementById('local-avatar');
+        const remoteAvatar = document.getElementById('remote-avatar');
+        const localStatus = document.getElementById('local-status');
+        const remoteStatus = document.getElementById('remote-status');
+
+        // Microphone toggle
+        micToggle.addEventListener('click', () => {
+            isMicOn = !isMicOn;
+            
+            if (isMicOn) {
+                micToggle.classList.remove('muted');
+                micToggle.textContent = '🎤';
+                localStatus.textContent = 'Microphone on';
+                document.getElementById('local-muted').style.display = 'none';
+            } else {
+                micToggle.classList.add('muted');
+                micToggle.textContent = '🔇';
+                localStatus.textContent = 'Microphone off';
+                document.getElementById('local-muted').style.display = 'block';
+            }
+        });
+
+        // Camera toggle
+        cameraToggle.addEventListener('click', () => {
+            isCameraOn = !isCameraOn;
+            
+            if (isCameraOn) {
+                cameraToggle.classList.remove('off');
+                cameraToggle.textContent = '📹';
+                localParticipant.classList.remove('audio-only');
+                localVideo.style.display = 'block';
+                localAvatar.style.display = 'none';
+                
+                // Simulate camera access
+                localVideo.style.background = 'linear-gradient(45deg, #3b82f6, #10b981)';
+                localVideo.style.display = 'flex';
+                localVideo.style.alignItems = 'center';
+                localVideo.style.justifyContent = 'center';
+                localVideo.innerHTML = '<div style="color: white; font-size: 18px;">📹 Camera Active</div>';
+                
+                if (isConnected) {
+                    remoteParticipant.classList.remove('audio-only');
+                    remoteVideo.style.display = 'block';
+                    remoteAvatar.style.display = 'none';
+                    remoteVideo.style.background = 'linear-gradient(45deg, #8b5cf6, #06b6d4)';
+                    remoteVideo.style.display = 'flex';
+                    remoteVideo.style.alignItems = 'center';
+                    remoteVideo.style.justifyContent = 'center';
+                    remoteVideo.innerHTML = '<div style="color: white; font-size: 18px;">📹 John Doe</div>';
+                }
+            } else {
+                cameraToggle.classList.add('off');
+                cameraToggle.textContent = '📷';
+                localParticipant.classList.add('audio-only');
+                localVideo.style.display = 'none';
+                localAvatar.style.display = 'flex';
+                
+                if (isConnected) {
+                    remoteParticipant.classList.add('audio-only');
+                    remoteVideo.style.display = 'none';
+                    remoteAvatar.style.display = 'flex';
+                }
+            }
+        });
+
+        // End call with confirmation modal
+        function showEndCallModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-icon">📞</div>
+                    <div class="modal-title">End call?</div>
+                    <div class="modal-message">Are you sure you want to leave this call? This action cannot be undone.</div>
+                    <div class="modal-buttons">
+                        <button class="modal-btn secondary" id="cancel-end">Stay in call</button>
+                        <button class="modal-btn danger" id="confirm-end">End call</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            document.getElementById('cancel-end').addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+            
+            document.getElementById('confirm-end').addEventListener('click', () => {
+                // Clean up localStorage
+                localStorage.removeItem('userName');
+                localStorage.removeItem('pendingCallId');
+                localStorage.removeItem('isCreator');
+                window.location.href = 'index.html';
+            });
+            
+            // Close on outside click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            });
+        }
+
+        endCallBtn.addEventListener('click', showEndCallModal);
+
+        // Simulate connection after 2 seconds
+        setTimeout(() => {
+            isConnected = true;
+            const remoteNames = ['Alex Johnson', 'Sarah Chen', 'Mike Rodriguez', 'Emma Thompson', 'David Kim'];
+            const randomName = remoteNames[Math.floor(Math.random() * remoteNames.length)];
+            
+            document.getElementById('remote-name').textContent = randomName;
+            document.getElementById('remote-avatar-text').textContent = randomName.split(' ').map(n => n[0]).join('');
+            document.getElementById('remote-status').textContent = 'Connected';
+            document.getElementById('waiting-message').style.display = 'none';
+            
+            // Simulate speaking animation occasionally
+            setInterval(() => {
+                if (Math.random() > 0.7) {
+                    document.getElementById('remote-speaking').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('remote-speaking').style.display = 'none';
+                    }, 2000);
+                }
+            }, 5000);
+        }, 2000);
+
+        // Handle beforeunload
+        window.addEventListener('beforeunload', (e) => {
+            e.preventDefault();
+            e.returnValue = 'Are you sure you want to leave the call?';
+        });
+
+        // Handle back button
+        window.addEventListener('popstate', (e) => {
+            e.preventDefault();
+            showEndCallModal();
+        });
+    </script>
+</body>
+</html>
