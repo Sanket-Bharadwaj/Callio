@@ -1,86 +1,42 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Callio – In Call</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Callio – In Call</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
   <style>
     :root {
-      --bg: #0f172a;
-      --fg: #f8fafc;
-      --secondary: #334155;
-      --accent: #3b82f6;
-      --muted: #64748b;
-      --error: #ef4444;
+      --bg: #0f172a; --fg: #f8fafc; --secondary: #334155;
+      --accent: #3b82f6; --error: #ef4444;
     }
-
     body {
-      font-family: 'Inter', sans-serif;
-      background-color: var(--bg);
-      color: var(--fg);
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      align-items: center;
-      justify-content: center;
+      background: var(--bg); color: var(--fg); font-family: 'Inter', sans-serif;
+      margin:0; display:flex; flex-direction:column;
+      height:100vh; align-items:center; justify-content:center;
+      gap:20px; padding:1rem;
     }
-
+    .label { font-size:1.25rem; font-weight:600; }
     .video-container {
-      display: flex;
-      gap: 20px;
-      margin-bottom: 40px;
+      display:flex; gap:20px;
     }
-
     video {
-      width: 160px;
-      height: 160px;
-      background-color: var(--secondary);
-      border-radius: 12px;
-      object-fit: cover;
+      width:140px; height:140px; background:var(--secondary);
+      border-radius:12px; object-fit:cover;
     }
-
     .controls {
-      display: flex;
-      gap: 16px;
+      display:flex; gap:16px;
     }
-
     button {
-      padding: 14px;
-      font-size: 18px;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      background-color: var(--secondary);
-      color: var(--fg);
-      transition: all 0.2s ease;
+      padding:12px; font-size:18px; border:none;
+      border-radius:10px; cursor:pointer;
+      background:var(--secondary); color:var(--fg);
+      transition:background 0.2s;
     }
-
-    button:hover {
-      background-color: var(--accent);
-    }
-
-    #end-call {
-      background-color: var(--error);
-      color: white;
-    }
-
-    #end-call:hover {
-      background-color: #dc2626;
-    }
-
-    .label {
-      margin-bottom: 20px;
-      font-size: 20px;
-      font-weight: 600;
-    }
+    button:hover { background: var(--accent); }
+    #end { background:var(--error); color:white; }
   </style>
 </head>
 <body>
-
-  <div class="label">In Call – Room <span id="room-name"></span></div>
+  <div class="label">Room: <span id="room-span">—</span></div>
 
   <div class="video-container">
     <video id="localVideo" autoplay muted playsinline></video>
@@ -88,94 +44,84 @@
   </div>
 
   <div class="controls">
-    <button id="mic-toggle">🔇 Mute</button>
-    <button id="end-call">❌ End Call</button>
+    <button id="mic-btn">🔇 Mute</button>
+    <button id="end">❌ End Call</button>
   </div>
 
-  <script>
-    const roomId = new URLSearchParams(window.location.search).get('id');
-    document.getElementById('room-name').textContent = roomId || '—';
+  <script type="module">
+    import { io } from 'https://cdn.socket.io/4.7.2/socket.io.esm.min.js';
+
+    const roomId = new URLSearchParams(location.search).get('id');
+    if (!roomId) location.href = 'index.html';
+
+    document.getElementById('room-span').textContent = roomId;
 
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
-    const micToggle = document.getElementById('mic-toggle');
-    const endCallBtn = document.getElementById('end-call');
+    const micBtn = document.getElementById('mic-btn');
+    const endBtn = document.getElementById('end');
 
-    let localStream;
-    let peerConnection;
+    const socket = io('https://callio.onrender.com', { transports: ['polling', 'websocket'] });
+    let pc, localStream;
 
-    const socket = new WebSocket('wss://callio.onrender.com');
+    socket.on('connect', () => {
+      socket.emit('join', roomId);
+    });
 
-    socket.onopen = () => {
-      console.log('Connected to signaling server');
-      socket.send(JSON.stringify({ type: 'join', roomId }));
-    };
-
-    socket.onmessage = async (event) => {
-      const message = JSON.parse(event.data);
-
-      if (!peerConnection) return;
-
-      if (message.type === 'signal') {
-        const payload = message.payload;
-
-        if (payload.sdp) {
-          await peerConnection.setRemoteDescription(payload);
-          if (payload.type === 'offer') {
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            socket.send(JSON.stringify({ type: 'signal', roomId, payload: answer }));
-          }
+    socket.on('signal', async data => {
+      if (!pc) return;
+      if (data.sdp) {
+        await pc.setRemoteDescription(data);
+        if (data.type === 'offer') {
+          const ans = await pc.createAnswer();
+          await pc.setLocalDescription(ans);
+          socket.emit('signal', { roomId, payload: pc.localDescription });
         }
-
-        if (payload.candidate) {
-          await peerConnection.addIceCandidate(payload);
-        }
+      } else if (data.candidate) {
+        await pc.addIceCandidate(data);
       }
-    };
+    });
 
-    async function startCall() {
+    async function start() {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       localVideo.srcObject = localStream;
 
-      peerConnection = new RTCPeerConnection({
+      pc = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
       });
 
-      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-      peerConnection.onicecandidate = event => {
-        if (event.candidate) {
-          socket.send(JSON.stringify({ type: 'signal', roomId, payload: event.candidate }));
+      pc.onicecandidate = e => {
+        if (e.candidate) {
+          socket.emit('signal', { roomId, payload: e.candidate });
         }
       };
 
-      peerConnection.ontrack = event => {
-        remoteVideo.srcObject = event.streams[0];
+      pc.ontrack = e => {
+        remoteVideo.srcObject = e.streams[0];
       };
 
-      peerConnection.onnegotiationneeded = async () => {
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        socket.send(JSON.stringify({ type: 'signal', roomId, payload: offer }));
+      pc.onnegotiationneeded = async () => {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('signal', { roomId, payload: pc.localDescription });
       };
     }
 
-    micToggle.onclick = () => {
+    micBtn.onclick = () => {
       const audioTrack = localStream.getAudioTracks()[0];
       audioTrack.enabled = !audioTrack.enabled;
-      micToggle.textContent = audioTrack.enabled ? '🔇 Mute' : '🎤 Unmute';
+      micBtn.textContent = audioTrack.enabled ? '🔇 Mute' : '🎤 Unmute';
     };
 
-    endCallBtn.onclick = () => {
-      if (peerConnection) peerConnection.close();
-      socket.close();
-      window.location.href = 'index.html';
+    endBtn.onclick = () => {
+      pc && pc.close();
+      socket.disconnect();
+      location.href = 'index.html';
     };
 
-    startCall().catch(err => {
-      alert('Error accessing microphone: ' + err.message);
-    });
+    start().catch(err => alert('Microphone access error: ' + err.message));
   </script>
 </body>
 </html>
