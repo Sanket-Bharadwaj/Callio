@@ -35,25 +35,35 @@
     }
     .control-btn svg { width: 1.5rem; height: 1.5rem; }
     .control-btn:hover svg { stroke: #dbeafe; }
-    #videos { position: fixed; bottom: 1rem; right: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; max-width: 50%; }
+    .control-btn.off { background-color: #ef4444; }
+    .control-btn.on { background-color: #22c55e; }
+    #videos { position: fixed; bottom: 6rem; right: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; max-width: 50%; z-index: 10; }
     .video-container video { width: 120px; height: 90px; }
   </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col">
   <header class="flex justify-between items-center p-4 bg-gray-800 shadow-md">
     <h2 class="text-lg font-semibold">Room: <span id="room-code" class="text-blue-400"></span></h2>
-    <button id="leave-btn" class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Leave room">Leave</button>
+    <div class="flex gap-2">
+      <button id="share-btn" class="control-btn p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Copy room link">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+        <span class="share-text">Share</span>
+      </button>
+      <button id="leave-btn" class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Leave room">Leave</button>
+    </div>
   </header>
-  <main id="videos" class="z-10"></main>
+  <main id="videos"></main>
   <div class="controls flex flex-wrap gap-4 p-4 bg-gray-800 justify-center fixed bottom-0 left-0 right-0">
-    <button id="mute-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Toggle microphone">
+    <button id="mute-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200 off" aria-label="Toggle microphone">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
       </svg>
     </button>
-    <button id="camera-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Toggle camera">
+    <button id="camera-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200 off" aria-label="Toggle camera">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14m-6 0a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     </button>
     <button id="flip-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Flip camera">
@@ -61,19 +71,9 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
       </svg>
     </button>
-    <button id="audio-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Audio-only mode">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-      </svg>
-    </button>
     <button id="emoji-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Send emoji">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    </button>
-    <button id="share-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Copy room link">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
       </svg>
     </button>
   </div>
@@ -113,17 +113,18 @@
           audio: true
         });
         localStream = stream;
+        localStream.getAudioTracks()[0].enabled = false; // Mute by default
         localStream.getVideoTracks()[0].enabled = false; // Camera off by default
         addVideo("You", stream, true);
-        showToast("Camera off by default");
+        showToast("Camera and microphone off by default");
       } catch (err) {
         showToast("Failed to access camera or microphone");
-        console.error(err);
+        console.error("initLocal error:", err);
       }
     }
 
     function addVideo(name, stream, isLocal) {
-      if (containers[name]) return;
+     if (containers[name]) return;
       const div = document.createElement("div");
       div.className = "video-container relative";
       const vid = document.createElement("video");
@@ -138,6 +139,10 @@
       div.appendChild(tag);
       videos.appendChild(div);
       containers[name] = vid;
+      vid.play().catch(err => {
+        console.error(`Failed to play video for ${name}:`, err);
+        showToast(`Failed to play video for ${name}`);
+      });
     }
 
     function createPeer(name, initiator) {
@@ -146,29 +151,51 @@
       localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
       peer.ontrack = e => {
         const stream = e.streams[0];
+        console.log(`Received stream for ${name}:`, stream);
         addVideo(name, stream, false);
       };
       peer.onicecandidate = e => {
-        if (e.candidate) ws.send(JSON.stringify({ type: "signal", roomId, to: name, from: userName, payload: { candidate: e.candidate } }));
+        if (e.candidate) {
+          console.log(`Sending ICE candidate to ${name}`);
+          ws.send(JSON.stringify({ type: "signal", roomId, to: name, from: userName, payload: { candidate: e.candidate } }));
+        }
+      };
+      peer.onconnectionstatechange = () => {
+        console.log(`Peer connection state for ${name}: ${peer.connectionState}`);
+        if (peer.connectionState === "failed" || peer.connectionState === "disconnected") {
+          showToast(`Connection to ${name} failed`);
+          delete peers[name];
+          if (containers[name]) {
+            containers[name].parentNode.remove();
+            delete containers[name];
+          }
+        }
       };
       peers[name] = peer;
       if (initiator) {
         peer.createOffer().then(o => {
           peer.setLocalDescription(o);
+          console.log(`Sending SDP offer to ${name}`);
           ws.send(JSON.stringify({ type: "signal", roomId, to: name, from: userName, payload: { sdp: o } }));
+        }).catch(err => {
+          console.error(`Failed to create offer for ${name}:`, err);
+          showToast(`Failed to initiate connection with ${name}`);
         });
       }
     }
 
     ws.onopen = () => {
+      console.log("WebSocket connected");
       ws.send(JSON.stringify({ type: "join", roomId, name: userName }));
       initLocal();
     };
 
     ws.onmessage = async m => {
       const data = JSON.parse(m.data);
+      console.log("WebSocket message received:", data);
       const { type, from, payload, members, emoji } = data;
       if (type === "joined") {
+        console.log(`Members in room: ${members}`);
         members.forEach(m => { if (m !== userName) createPeer(m, true); });
         showToast(`${from} joined`);
       }
@@ -176,14 +203,27 @@
         if (!peers[from]) createPeer(from, false);
         const peer = peers[from];
         if (payload.sdp) {
-          await peer.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          if (payload.sdp.type === "offer") {
-            const ans = await peer.createAnswer();
-            peer.setLocalDescription(ans);
-            ws.send(JSON.stringify({ type: "signal", roomId, to: from, from: userName, payload: { sdp: ans } }));
+          try {
+            await peer.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            if (payload.sdp.type === "offer") {
+              const ans = await peer.createAnswer();
+              await peer.setLocalDescription(ans);
+              console.log(`Sending SDP answer to ${from}`);
+              ws.send(JSON.stringify({ type: "signal", roomId, to: from, from: userName, payload: { sdp: ans } }));
+            }
+          } catch (err) {
+            console.error(`Failed to handle SDP for ${from}:`, err);
+            showToast(`Failed to connect with ${from}`);
           }
         }
-        if (payload.candidate) peer.addIceCandidate(new RTCIceCandidate(payload.candidate));
+        if (payload.candidate) {
+          try {
+            await peer.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            console.log(`Added ICE candidate for ${from}`);
+          } catch (err) {
+            console.error(`Failed to add ICE candidate for ${from}:`, err);
+          }
+        }
       }
       if (type === "emoji") {
         const vid = containers[from];
@@ -192,37 +232,64 @@
       }
     };
 
+    ws.onerror = err => {
+      console.error("WebSocket error:", err);
+      showToast("WebSocket connection error");
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket closed");
+      showToast("WebSocket connection closed");
+    };
+
     document.getElementById("mute-btn").onclick = () => {
       const t = localStream.getAudioTracks()[0];
       t.enabled = !t.enabled;
+      const btn = document.getElementById("mute-btn");
+      btn.classList.toggle("off", !t.enabled);
+      btn.classList.toggle("on", t.enabled);
       showToast(t.enabled ? "Unmuted" : "Muted");
     };
 
     document.getElementById("camera-btn").onclick = () => {
       const t = localStream.getVideoTracks()[0];
       t.enabled = !t.enabled;
+      const btn = document.getElementById("camera-btn");
+      btn.classList.toggle("off", !t.enabled);
+      btn.classList.toggle("on", t.enabled);
       showToast(t.enabled ? "Cam On" : "Cam Off");
     };
 
     document.getElementById("flip-btn").onclick = async () => {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const vids = devices.filter(d => d.kind === "videoinput");
-      if (vids.length > 1) {
-        const idx = vids.findIndex(d => d.deviceId === videoDeviceId);
-        videoDeviceId = vids[(idx + 1) % vids.length].deviceId;
-        await initLocal();
-        Object.values(peers).forEach(p => {
-          const sender = p.getSenders().find(s => s.track.kind === "video");
-          sender.replaceTrack(localStream.getVideoTracks()[0]);
-        });
-        showToast("Camera switched");
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const vids = devices.filter(d => d.kind === "videoinput");
+        if (vids.length > 1) {
+          const idx = vids.findIndex(d => d.deviceId === videoDeviceId);
+          videoDeviceId = vids[(idx + 1) % vids.length].deviceId;
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: videoDeviceId },
+            audio: true
+          });
+          localStream.getTracks().forEach(t => t.stop());
+          localStream = stream;
+          localStream.getAudioTracks()[0].enabled = document.getElementById("mute-btn").classList.contains("on");
+          localStream.getVideoTracks()[0].enabled = document.getElementById("camera-btn").classList.contains("on");
+          containers["You"].srcObject = stream;
+          Object.values(peers).forEach(p => {
+            const sender = p.getSenders().find(s => s.track.kind === "video");
+            sender.replaceTrack(localStream.getVideoTracks()[0]);
+            const audioSender = p.getSenders().find(s => s.track.kind === "audio");
+            audioSender.replaceTrack(localStream.getAudioTracks()[0]);
+          });
+          showToast("Camera switched");
+        } else {
+          showToast("No additional cameras available");
+        }
+      } catch (err) {
+        console.error("Flip camera error:", err);
+        showToast("Failed to switch camera");
       }
-    };
-
-    document.getElementById("audio-btn").onclick = () => {
-      const t = localStream.getVideoTracks()[0];
-      t.enabled = false;
-      showToast("Audio-only mode");
     };
 
     document.getElementById("emoji-btn").onclick = () => {
@@ -234,11 +301,21 @@
     };
 
     document.getElementById("share-btn").onclick = () => {
-      navigator.clipboard.writeText(location.href);
-      showToast("Link copied!");
+      const btn = document.getElementById("share-btn");
+      const shareText = btn.querySelector(".share-text");
+      navigator.clipboard.writeText(location.href).then(() => {
+        shareText.textContent = "Copied!";
+        showToast("Link copied!");
+        setTimeout(() => shareText.textContent = "Share", 2000);
+      }).catch(err => {
+        console.error("Failed to copy link:", err);
+        showToast("Failed to copy link");
+      });
     };
 
     document.getElementById("leave-btn").onclick = () => {
+      localStream?.getTracks().forEach(t => t.stop());
+      ws.close();
       window.location.href = "index.html";
     };
   </script>
