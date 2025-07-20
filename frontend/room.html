@@ -90,8 +90,10 @@
     <div id="toastContainer" class="fixed bottom-16 right-4 space-y-2"></div>
     <script>
         if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-            alert('Callioo requires HTTPS for camera and microphone access. Please access the app via a secure connection.');
+            alert('Callioo requires HTTPS for camera and microphone access. Please access the app via https://callioo.vercel.app or localhost.');
+            showToast('Redirecting to index.html due to insecure context.');
             window.location.href = 'index.html';
+            throw new Error('Insecure context');
         }
 
         const params = new URLSearchParams(window.location.search);
@@ -159,40 +161,66 @@
         async function getLocalStream() {
             if (localStream) return; // Prevent duplicate streams
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: isCameraOn ? { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15 } } : false,
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: isCameraOn ? { facingMode: currentFacingMode, width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } } : false,
                     audio: isMicOn
                 });
+                localStream = stream;
                 localVideo.srcObject = localStream;
                 await setAudioOutputToSpeaker();
                 noVideoPlaceholder.classList.add('hidden');
                 localVideo.classList.remove('hidden');
-                showToast('Local stream started');
+                showToast('Local stream started successfully');
                 checkPeerCount();
             } catch (err) {
-                console.error('Permission Error:', err.name, err.message);
+                console.error('Media Access Error:', err.name, err.message, err.stack);
                 if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
                     if (permissionRetryCount < MAX_RETRIES) {
                         permissionRetryCount++;
-                        showToast(`Camera/mic access denied. Please grant permissions (${MAX_RETRIES - permissionRetryCount} retries left). Check browser settings if this persists.`);
-                        setTimeout(getLocalStream, 2000);
+                        showToast(`Camera/mic access denied. Retrying (${MAX_RETRIES - permissionRetryCount} attempts left). Click to retry now.`);
+                        document.body.addEventListener('click', getLocalStream, { once: true });
                     } else {
-                        showToast('Camera/mic access denied permanently. Check browser settings (Settings > Privacy > Camera/Microphone) and refresh.');
+                        showToast('Camera/mic access denied permanently. Please check browser settings (e.g., Settings > Privacy > Camera/Microphone) and refresh the page.');
                         tryAudioOnly();
                     }
                 } else if (err.name === 'NotFoundError') {
-                    showToast('No camera/mic found. Falling back to audio-only.');
+                    showToast('No camera or microphone found. Falling back to audio-only or check device connections.');
                     tryAudioOnly();
+                } else if (err.name === 'OverconstrainedError') {
+                    showToast('Media constraints failed. Trying basic access...');
+                    await getLocalStreamBasic();
                 } else {
-                    showToast('Failed to access camera/mic. Check devices and permissions.');
+                    showToast(`Failed to access camera/mic: ${err.name}. Check devices, permissions, and refresh if needed.`);
                 }
+            }
+        }
+
+        async function getLocalStreamBasic() {
+            if (localStream) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: isCameraOn,
+                    audio: isMicOn
+                });
+                localStream = stream;
+                localVideo.srcObject = localStream;
+                await setAudioOutputToSpeaker();
+                noVideoPlaceholder.classList.add('hidden');
+                localVideo.classList.remove('hidden');
+                showToast('Basic stream started successfully');
+                checkPeerCount();
+            } catch (err) {
+                console.error('Basic Media Access Error:', err);
+                showToast('Basic access failed. Ensure devices are connected and permissions are granted.');
+                tryAudioOnly();
             }
         }
 
         async function tryAudioOnly() {
             if (localStream) return;
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localStream = stream;
                 localVideo.srcObject = null;
                 await setAudioOutputToSpeaker();
                 noVideoPlaceholder.classList.remove('hidden');
@@ -200,8 +228,8 @@
                 showToast('Video unavailable, using audio only');
                 checkPeerCount();
             } catch (audioErr) {
-                console.error('Error accessing audio:', audioErr);
-                showToast('Failed to access audio. Please check permissions and devices.');
+                console.error('Audio Error:', audioErr);
+                showToast('Failed to access audio. Check microphone permissions and device.');
             }
         }
 
@@ -363,7 +391,7 @@
             currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
             try {
                 const newStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15 } },
+                    video: { facingMode: currentFacingMode, width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } },
                     audio: true
                 });
                 const newVideoTrack = newStream.getVideoTracks()[0];
