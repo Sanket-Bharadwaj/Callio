@@ -1,256 +1,211 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Callio Room</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root{--bg: #0f172a;--card:#1e293b;--text:#f1f5f9;--accent:#3b82f6;--border:#334155}
-    body { background: var(--bg); color: var(--text); font-family: Inter, sans-serif; margin:0; display:flex; flex-direction:column; min-height:100vh}
-    header{padding:1rem; background:var(--card); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border)}
-    main#videos { flex:1; position: relative; display:flex; flex-wrap: wrap; justify-content:center; align-items:center;}
-    .video-container{position:relative; margin:0.5rem;}
-    .video-container video{width:240px; height:180px; background:#000; border-radius:8px; object-fit:cover;}
-    .user-tag{position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.6); color:#fff; padding:2px 4px; border-radius:4px; font-size:0.75rem;}
-    .controls{display:flex; gap:1rem; padding:1rem; background:var(--card); justify-content:center;}
-    .control-btn{padding:0.5rem; background:var(--accent); border:none; border-radius:8px; cursor:pointer; color:#fff;}
-    .control-btn.off{background:#ef4444}
-    .control-btn.on{background:#22c55e}
-    .toast{position:fixed; bottom:1rem; right:1rem; background:var(--card); color:#fff; padding:0.75rem 1rem; border-radius:8px; animation:fade 3s forwards}
-    @keyframes fade{to{opacity:0}}
-    .emoji-overlay{position:absolute; font-size:2rem; animation:fade 1.2s forwards;}
+    body { margin:0; font-family:sans-serif; background:#0f172a; color:#f1f5f9; display:flex; flex-direction:column; height:100vh }
+    header { background:#1e293b; padding:1rem; display:flex; justify-content:space-between; align-items:center }
+    header h2 { margin:0; font-size:1rem; }
+    #videos { flex:1; display:flex; flex-wrap:wrap; gap:1rem; justify-content:center; align-items:center; padding:1rem; overflow:auto }
+    .video-box { position:relative; }
+    .video-box video { width:280px; height:200px; background:black; border-radius:10px }
+    .video-box .label { position:absolute; bottom:5px; left:5px; font-size:0.75rem; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:4px }
+    footer { background:#1e293b; padding:0.75rem; display:flex; gap:10px; justify-content:center }
+    button { background:#3b82f6; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer }
+    .toast { position:fixed; bottom:10px; right:10px; background:#1e293b; padding:10px; border-radius:8px; color:white; display:none }
+    .emoji { position:absolute; font-size:2rem; animation:fadeout 1.2s forwards }
+    @keyframes fadeout { to { opacity:0; transform:translateY(-20px) } }
   </style>
 </head>
 <body>
   <header>
-    <div>Room: <span id="room-code" class="font-semibold text-blue-400"></span></div>
-    <div class="flex gap-2">
-      <button id="share-btn" class="control-btn">Share</button>
-      <button id="leave-btn" class="control-btn">Leave</button>
+    <h2>Room: <span id="room-id"></span></h2>
+    <div>
+      <button onclick="shareRoom()">Share</button>
+      <button onclick="leaveRoom()">Leave</button>
     </div>
   </header>
-
   <main id="videos"></main>
-
-  <div class="controls">
-    <button id="mute-btn" class="control-btn off">🎤</button>
-    <button id="camera-btn" class="control-btn off">📷</button>
-    <button id="flip-btn" class="control-btn">🔄</button>
-    <button id="emoji-btn" class="control-btn">😊</button>
-  </div>
-
-  <div id="toast" class="toast hidden"><span id="toastMessage"></span></div>
+  <footer>
+    <button id="mic-btn">🎤</button>
+    <button id="cam-btn">📷</button>
+    <button onclick="flipCamera()">🔄</button>
+    <button onclick="sendEmoji()">😊</button>
+  </footer>
+  <div class="toast" id="toast"></div>
 
   <script>
-  const ws = new WebSocket("wss://callio.onrender.com");
-  const roomId = new URLSearchParams(location.search).get("id");
-  const userName = localStorage.getItem("userName") || prompt("Enter name") || "You";
-  localStorage.setItem("userName", userName);
-  document.getElementById("room-code").textContent = roomId;
+    const ws = new WebSocket("wss://callio.onrender.com"); // update if using localhost
+    const roomId = new URLSearchParams(location.search).get("id");
+    document.getElementById("room-id").textContent = roomId;
 
-  let localStream, currentCamId, micOn=false, camOn=false;
-  const peers = {}, containers = {}, streams = {};
+    const userName = localStorage.getItem("userName") || prompt("Your name?");
+    localStorage.setItem("userName", userName);
 
-  function showToast(msg){
-    const t = document.getElementById("toast");
-    document.getElementById("toastMessage").textContent = msg;
-    t.classList.remove("hidden");
-    setTimeout(()=>t.classList.add("hidden"), 3000);
-  }
+    const peers = {}, videoElems = {}, streams = {};
+    let localStream = null, micOn = true, camOn = true, currentCamId = null;
 
-  function showEmoji(el, emoji){
-    const o = document.createElement("div");
-    o.className = "emoji-overlay";
-    o.textContent = emoji;
-    el.parentNode.appendChild(o);
-    setTimeout(()=>o.remove(), 1200);
-  }
+    const videoContainer = document.getElementById("videos");
+    const toast = document.getElementById("toast");
 
-  async function startLocal(){
-    const cams = await navigator.mediaDevices.enumerateDevices();
-    const vidInputs = cams.filter(d => d.kind === "videoinput");
-    currentCamId = vidInputs[0]?.deviceId;
-    localStream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: currentCamId ? { deviceId: { exact: currentCamId } } : true
-    });
-    localStream.getAudioTracks()[0].enabled = micOn;
-    localStream.getVideoTracks()[0].enabled = camOn;
-    addVideo(userName, localStream, true);
-    showToast("Local ready");
-  }
-
-  function addVideo(name, stream, isLocal){
-    if(containers[name]) return;
-    const div = document.createElement("div");
-    div.className = "video-container";
-    const video = document.createElement("video");
-    video.autoplay = true;
-    video.playsInline = true;
-    video.srcObject = stream;
-    if(isLocal) video.muted = true;
-    const tag = document.createElement("div");
-    tag.className = "user-tag";
-    tag.textContent = name;
-    div.appendChild(video);
-    div.appendChild(tag);
-    document.getElementById("videos").appendChild(div);
-    containers[name] = video;
-    streams[name] = stream;
-  }
-
-  function createPeer(peerName, initiator){
-    if(!localStream) return;
-    if(peers[peerName]) return;
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-    peers[peerName] = pc;
-
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-    pc.ontrack = e => {
-      if(!streams[peerName]){
-        const ms = new MediaStream();
-        addVideo(peerName, ms, false);
-        streams[peerName] = ms;
-      }
-      streams[peerName].addTrack(e.track);
-    };
-    pc.onicecandidate = e => {
-      if(e.candidate){
-        ws.send(JSON.stringify({
-          type: "signal",
-          roomId,
-          to: peerName,
-          from: userName,
-          payload: { candidate: e.candidate }
-        }));
-      }
-    };
-    pc.onconnectionstatechange = () => {
-      if(pc.connectionState === "disconnected" || pc.connectionState === "failed"){
-        showToast(`${peerName} disconnected`);
-        pc.close();
-        delete peers[peerName];
-        containers[peerName]?.parentNode.remove();
-        delete containers[peerName];
-      }
-    };
-
-    if(initiator){
-      pc.createOffer()
-        .then(o => {
-          pc.setLocalDescription(o);
-          ws.send(JSON.stringify({
-            type: "signal",
-            roomId,
-            to: peerName,
-            from: userName,
-            payload: { sdp: o }
-          }));
-        });
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.style.display = "block";
+      setTimeout(() => toast.style.display = "none", 3000);
     }
-  }
 
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ type: "join", roomId, from: userName }));
-    startLocal();
-  };
-
-  ws.onmessage = async msg => {
-    const data = JSON.parse(msg.data);
-    if(data.type === "joined"){
-      for(const m of data.members){
-        if(m !== userName) createPeer(m, true);
-      }
-      showToast(`${data.members.length} in room`);
+    function addVideo(name, stream, isLocal) {
+      if (videoElems[name]) return;
+      const box = document.createElement("div");
+      box.className = "video-box";
+      const v = document.createElement("video");
+      v.autoplay = v.playsInline = true;
+      v.srcObject = stream;
+      if (isLocal) v.muted = true;
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = name;
+      box.appendChild(v);
+      box.appendChild(label);
+      videoContainer.appendChild(box);
+      videoElems[name] = box;
+      streams[name] = stream;
     }
-    if(data.type === "signal"){
-      const pcName = data.from;
-      if(!peers[pcName]) createPeer(pcName, false);
-      const pc = peers[pcName];
-      if(data.payload.sdp){
-        await pc.setRemoteDescription(new RTCSessionDescription(data.payload.sdp));
-        if(data.payload.sdp.type === "offer"){
-          const ans = await pc.createAnswer();
-          pc.setLocalDescription(ans);
-          ws.send(JSON.stringify({
-            type: "signal",
-            roomId,
-            to: pcName,
-            from: userName,
-            payload: { sdp: ans }
-          }));
+
+    function showEmojiOn(name, emoji) {
+      const box = videoElems[name];
+      if (!box) return;
+      const e = document.createElement("div");
+      e.className = "emoji";
+      e.textContent = emoji;
+      box.appendChild(e);
+      setTimeout(() => e.remove(), 1200);
+    }
+
+    async function initMedia() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === "videoinput");
+      currentCamId = cams[0]?.deviceId;
+
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: currentCamId } },
+        audio: true
+      });
+      addVideo(userName, localStream, true);
+    }
+
+    function createPeer() {
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      });
+
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          ws.send(JSON.stringify({ type: "signal", roomId, payload: { candidate: e.candidate } }));
+        }
+      };
+
+      pc.ontrack = (e) => {
+        const stream = new MediaStream();
+        stream.addTrack(e.track);
+        addVideo("Remote", stream, false);
+      };
+
+      return pc;
+    }
+
+    ws.onopen = async () => {
+      await initMedia();
+      ws.send(JSON.stringify({ type: "join", roomId }));
+    };
+
+    ws.onmessage = async (msg) => {
+      const data = JSON.parse(msg.data);
+      if (data.type === "signal" && data.payload) {
+        const pc = peers["peer"] || (peers["peer"] = createPeer());
+        if (data.payload.sdp) {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.payload.sdp));
+          if (data.payload.sdp.type === "offer") {
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({ type: "signal", roomId, payload: { sdp: answer } }));
+          }
+        }
+        if (data.payload.candidate) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(data.payload.candidate));
+          } catch (e) { console.error(e); }
         }
       }
-      if(data.payload.candidate){
-        await pc.addIceCandidate(new RTCIceCandidate(data.payload.candidate));
+    };
+
+    document.getElementById("mic-btn").onclick = () => {
+      micOn = !micOn;
+      localStream.getAudioTracks().forEach(t => t.enabled = micOn);
+      showToast(micOn ? "Mic On" : "Mic Off");
+    };
+
+    document.getElementById("cam-btn").onclick = () => {
+      camOn = !camOn;
+      localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+      showToast(camOn ? "Camera On" : "Camera Off");
+    };
+
+    async function flipCamera() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === "videoinput");
+      const idx = cams.findIndex(c => c.deviceId === currentCamId);
+      currentCamId = cams[(idx + 1) % cams.length].deviceId;
+
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: currentCamId } },
+        audio: true
+      });
+
+      const videoTrack = newStream.getVideoTracks()[0];
+      const audioTrack = newStream.getAudioTracks()[0];
+
+      const senderV = Object.values(peers).flatMap(pc =>
+        pc.getSenders().filter(s => s.track.kind === "video")
+      );
+      const senderA = Object.values(peers).flatMap(pc =>
+        pc.getSenders().filter(s => s.track.kind === "audio")
+      );
+
+      senderV.forEach(s => s.replaceTrack(videoTrack));
+      senderA.forEach(s => s.replaceTrack(audioTrack));
+
+      localStream.getTracks().forEach(t => t.stop());
+      localStream = newStream;
+      localStream.getVideoTracks()[0].enabled = camOn;
+      localStream.getAudioTracks()[0].enabled = micOn;
+
+      videoElems[userName].querySelector("video").srcObject = newStream;
+      showToast("Camera Flipped");
+    }
+
+    function sendEmoji() {
+      const emoji = prompt("Send Emoji (e.g., 😊):");
+      if (emoji) {
+        ws.send(JSON.stringify({ type: "signal", roomId, payload: { emoji } }));
+        showEmojiOn(userName, emoji);
       }
     }
-    if(data.type === "emoji"){
-      showEmoji(containers[data.from], data.emoji);
-      showToast(`${data.from}: ${data.emoji}`);
+
+    function shareRoom() {
+      navigator.clipboard.writeText(window.location.href);
+      showToast("Room link copied!");
     }
-  };
 
-  document.getElementById("mute-btn").onclick = () => {
-    micOn = !micOn;
-    localStream.getAudioTracks()[0].enabled = micOn;
-    const btn = document.getElementById("mute-btn");
-    btn.classList.toggle("off", !micOn);
-    btn.classList.toggle("on", micOn);
-    showToast(micOn ? "Unmuted" : "Muted");
-  };
-
-  document.getElementById("camera-btn").onclick = () => {
-    camOn = !camOn;
-    localStream.getVideoTracks()[0].enabled = camOn;
-    const btn = document.getElementById("camera-btn");
-    btn.classList.toggle("off", !camOn);
-    btn.classList.toggle("on", camOn);
-    showToast(camOn ? "Camera On" : "Camera Off");
-  };
-
-  document.getElementById("flip-btn").onclick = async () => {
-    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
-    const idx = cams.findIndex(c => c.deviceId === currentCamId);
-    currentCamId = cams[(idx + 1) % cams.length].deviceId;
-    const newStream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: { exact: currentCamId } },
-      audio: true
-    });
-    localStream.getTracks().forEach(t => t.stop());
-    localStream = newStream;
-    localStream.getAudioTracks()[0].enabled = micOn;
-    localStream.getVideoTracks()[0].enabled = camOn;
-    containers[userName].srcObject = newStream;
-    for(const pc of Object.values(peers)){
-      const vs = pc.getSenders().find(s => s.track.kind === 'video');
-      vs && vs.replaceTrack(localStream.getVideoTracks()[0]);
-      const as = pc.getSenders().find(s => s.track.kind === 'audio');
-      as && as.replaceTrack(localStream.getAudioTracks()[0]);
+    function leaveRoom() {
+      ws.close();
+      localStream.getTracks().forEach(t => t.stop());
+      location.href = "/";
     }
-    showToast("Camera switched");
-  };
-
-  document.getElementById("emoji-btn").onclick = () => {
-    const e = prompt("Send emoji:");
-    if(e){
-      ws.send(JSON.stringify({ type: "emoji", roomId, from: userName, emoji: e }));
-      showEmoji(containers[userName], e);
-    }
-  };
-
-  document.getElementById("share-btn").onclick = () => {
-    navigator.clipboard.writeText(location.href).then(() => {
-      showToast("Link copied");
-    });
-  };
-
-  document.getElementById("leave-btn").onclick = () => {
-    localStream?.getTracks().forEach(t => t.stop());
-    for(const pc of Object.values(peers)) pc.close();
-    ws.close();
-    window.location.href = "index.html";
-  };
   </script>
 </body>
 </html>
