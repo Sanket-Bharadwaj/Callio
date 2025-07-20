@@ -1,199 +1,84 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Join or create video calls with Callio">
-  <title>Callio</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%233b82f6' d='M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9zm-3 12H7v-2h2v2zm0-4H7V9h2v2zm5 4h-2v-2h2v2zm0-4h-2V9h2v2z'/></svg>">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    .fade-in { animation: fadeIn 0.5s ease-out; }
-    .loading::after {
-      content: '';
-      display: inline-block;
-      width: 1rem;
-      height: 1rem;
-      margin-left: 0.5rem;
-      border: 2px solid white;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    .error-shake {
-      animation: shake 0.3s;
-    }
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-5px); }
-      75% { transform: translateX(5px); }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Callioo - Video Calls</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .emoji-animation {
+            animation: floatUp 2s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-100px); opacity: 0; }
+        }
+        .toast {
+            animation: slideIn 0.5s ease-out, slideOut 0.5s ease-out 2.5s forwards;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); }
+            to { transform: translateX(100%); }
+        }
+    </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
-  <div class="container max-w-md w-full bg-gray-800 rounded-2xl shadow-xl p-8 fade-in">
-    <div class="flex justify-between items-center mb-8">
-      <h1 class="text-3xl font-bold text-blue-400">Callio</h1>
-      <button id="themeToggle" class="p-2 rounded-full bg-gray-700 hover:bg-gray-600" aria-label="Toggle theme">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-      </button>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-md p-6 bg-gray-800 rounded-lg shadow-lg">
+        <h1 class="text-3xl font-bold text-center mb-6">Callioo</h1>
+        <div class="mb-4">
+            <label for="username" class="block text-sm font-medium mb-2">Your Username</label>
+            <input id="username" type="text" class="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your username" />
+        </div>
+        <div class="mb-4">
+            <label for="roomId" class="block text-sm font-medium mb-2">Room ID</label>
+            <input id="roomId" type="text" class="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter or generate room ID" value="" />
+        </div>
+        <button id="generateRoom" class="w-full p-2 bg-blue-600 hover:bg-blue-700 rounded-md mb-4">Generate Room ID</button>
+        <button id="joinRoom" class="w-full p-2 bg-green-600 hover:bg-green-700 rounded-md" disabled>Join Room</button>
     </div>
-    <form id="callForm" class="space-y-6" onsubmit="return false;">
-      <div>
-        <label for="nameInput" class="block text-sm font-medium text-gray-300 mb-2">Your Name</label>
-        <input 
-          id="nameInput" 
-          placeholder="Enter your name" 
-          class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white transition duration-200"
-          aria-required="true"
-          autocomplete="name"
-          required
-        />
-        <p id="nameError" class="text-red-400 text-sm mt-1 hidden">Please enter your name</p>
-      </div>
-      <button 
-        id="createBtn" 
-        disabled 
-        class="w-full p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition duration-200"
-        type="button"
-        aria-label="Create a new call"
-      >
-        Create Call
-      </button>
-      <div>
-        <label for="codeInput" class="block text-sm font-medium text-gray-300 mb-2">Room Code</label>
-        <input 
-          id="codeInput" 
-          placeholder="Enter room code (e.g., ABC123)" 
-          class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white transition duration-200"
-          aria-required="true"
-          maxlength="6"
-        />
-        <p id="codeError" class="text-red-400 text-sm mt-1 hidden">Please enter a valid room code</p>
-      </div>
-      <button 
-        id="joinBtn" 
-        disabled 
-        class="w-full p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition duration-200"
-        type="button"
-        aria-label="Join an existing call"
-      >
-        Join Call
-      </button>
-    </form>
-    <div id="toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg hidden">
-      <span id="toastMessage"></span>
-    </div>
-  </div>
-  <script>
-    const nameInput = document.getElementById("nameInput");
-    const codeInput = document.getElementById("codeInput");
-    const createBtn = document.getElementById("createBtn");
-    const joinBtn = document.getElementById("joinBtn");
-    const nameError = document.getElementById("nameError");
-    const codeError = document.getElementById("codeInput");
-    const toast = document.getElementById("toast");
-    const toastMessage = document.getElementById("toastMessage");
-    const form = document.getElementById("callForm");
+    <script>
+        const usernameInput = document.getElementById('username');
+        const roomIdInput = document.getElementById('roomId');
+        const generateRoomButton = document.getElementById('generateRoom');
+        const joinRoomButton = document.getElementById('joinRoom');
 
-    // Pre-fill name from localStorage
-    if (localStorage.getItem("userName")) {
-      nameInput.value = localStorage.getItem("userName");
-      createBtn.disabled = false;
-      joinBtn.disabled = false;
-    }
+        function generateRoomId() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0;
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+        }
 
-    // Theme toggle
-    const themeToggle = document.getElementById("themeToggle");
-    themeToggle.addEventListener("click", () => {
-      const isDark = document.documentElement.dataset.theme === "dark";
-      document.documentElement.dataset.theme = isDark ? "light" : "dark";
-      document.body.classList.toggle("bg-gray-900", isDark);
-      document.body.classList.toggle("bg-gray-100", !isDark);
-      document.querySelector(".container").classList.toggle("bg-gray-800", isDark);
-      document.querySelector(".container").classList.toggle("bg-white", !isDark);
-      document.querySelector("h1").classList.toggle("text-blue-400", isDark);
-      document.querySelector("h1").classList.toggle("text-blue-600", !isDark);
-    });
+        function validateInputs() {
+            joinRoomButton.disabled = !usernameInput.value.trim() || !roomIdInput.value.trim();
+        }
 
-    // Real-time input validation
-    nameInput.addEventListener("input", () => {
-      const hasName = nameInput.value.trim() !== "";
-      createBtn.disabled = !hasName;
-      joinBtn.disabled = !hasName;
-      nameError.classList.toggle("hidden", hasName);
-      if (!hasName) nameInput.classList.add("error-shake", "border-red-500");
-      else nameInput.classList.remove("error-shake", "border-red-500");
-    });
+        usernameInput.addEventListener('input', validateInputs);
+        roomIdInput.addEventListener('input', validateInputs);
 
-    // Format room code
-    codeInput.addEventListener("input", () => {
-      codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
-      const isValidCode = codeInput.value.length === 6;
-      codeError.classList.toggle("hidden", isValidCode || codeInput.value === "");
-      if (!isValidCode && codeInput.value !== "") codeInput.classList.add("error-shake", "border-red-500");
-      else codeInput.classList.remove("error-shake", "border-red-500");
-    });
+        generateRoomButton.addEventListener('click', () => {
+            roomIdInput.value = generateRoomId();
+            validateInputs();
+        });
 
-    // Show toast notification
-    function showToast(message) {
-      toastMessage.textContent = message;
-      toast.classList.remove("hidden");
-      setTimeout(() => toast.classList.add("hidden"), 3000);
-    }
+        joinRoomButton.addEventListener('click', () => {
+            const username = usernameInput.value.trim();
+            const roomId = roomIdInput.value.trim();
+            if (username && roomId) {
+                window.location.href = `room.html?room=${encodeURIComponent(roomId)}&user=${encodeURIComponent(username)}`;
+            }
+        });
 
-    // Button loading state
-    function setLoading(button, isLoading) {
-      button.disabled = isLoading;
-      button.classList.toggle("loading", isLoading);
-      button.textContent = isLoading ? "Processing..." : button.id === "createBtn" ? "Create Call" : "Join Call";
-    }
-
-    createBtn.onclick = () => {
-      const name = nameInput.value.trim();
-      if (!name) {
-        showToast("Please enter your name");
-        nameInput.classList.add("error-shake", "border-red-500");
-        return;
-      }
-      setLoading(createBtn, true);
-      const roomId = Math.random().toString(36).substring(2,8).toUpperCase();
-      localStorage.setItem("userName", name);
-      setTimeout(() => window.location.href = `room.html?id=${roomId}`, 500); // Simulate async
-    };
-
-    joinBtn.onclick = () => {
-      const name = nameInput.value.trim();
-      const roomId = codeInput.value.trim();
-      if (!name) {
-        showToast("Please enter your name");
-        nameInput.classList.add("error-shake", "border-red-500");
-        return;
-      }
-      if (!roomId || roomId.length !== 6) {
-        showToast("Enter a valid 6-character room code");
-        codeInput.classList.add("error-shake", "border-red-500");
-        return;
-      }
-      setLoading(joinBtn, true);
-      localStorage.setItem("userName", name);
-      setTimeout(() => window.location.href = `room.html?id=${roomId}`, 500); // Simulate async
-    };
-
-    // Handle form submission with Enter key
-    form.addEventListener("keypress", (e) => {
-      if (e.key === "Enter" && !createBtn.disabled) {
-        if (document.activeElement === nameInput && codeInput.value.trim()) joinBtn.click();
-        else createBtn.click();
-      }
-    });
-  </script>
+        // Check URL for room ID
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('room')) {
+            roomIdInput.value = params.get('room');
+            validateInputs();
+        }
+    </script>
 </body>
 </html>
