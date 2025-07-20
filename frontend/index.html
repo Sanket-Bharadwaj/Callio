@@ -6,13 +6,6 @@
     <title>Callioo - Video Calls</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .emoji-animation {
-            animation: floatUp 2s ease-out forwards;
-        }
-        @keyframes floatUp {
-            0% { transform: translateY(0); opacity: 1; }
-            100% { transform: translateY(-100px); opacity: 0; }
-        }
         .toast {
             animation: slideIn 0.5s ease-out, slideOut 0.5s ease-out 2.5s forwards;
         }
@@ -28,14 +21,14 @@
 </head>
 <body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
     <div class="w-full max-w-md p-6 bg-gray-800 rounded-lg shadow-lg">
-        <h1 class="text-3xl font-bold text-center mb-6">Callioo</h1>
+        <h1 class="text-3xl font-bold text-center mb-6">Callioo - Squad Call</h1>
         <div class="mb-4">
             <label for="username" class="block text-sm font-medium mb-2">Your Username</label>
             <input id="username" type="text" class="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your username" />
         </div>
         <div class="mb-4">
             <label for="roomId" class="block text-sm font-medium mb-2">Room ID</label>
-            <input id="roomId" type="text" class="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter or generate room ID" value="" />
+            <input id="roomId" type="text" class="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter or generate 6-digit room ID" value="" />
         </div>
         <button id="generateRoom" class="w-full p-2 bg-blue-600 hover:bg-blue-700 rounded-md mb-4">Generate Room ID</button>
         <button id="joinRoom" class="w-full p-2 bg-green-600 hover:bg-green-700 rounded-md" disabled>Join Room</button>
@@ -47,14 +40,12 @@
         const joinRoomButton = document.getElementById('joinRoom');
 
         function generateRoomId() {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-                const r = Math.random() * 16 | 0;
-                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-            });
+            return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit number
         }
 
         function validateInputs() {
-            joinRoomButton.disabled = !usernameInput.value.trim() || !roomIdInput.value.trim();
+            const roomId = roomIdInput.value.trim();
+            joinRoomButton.disabled = !usernameInput.value.trim() || !roomId || !/^\d{6}$/.test(roomId);
         }
 
         usernameInput.addEventListener('input', validateInputs);
@@ -68,15 +59,14 @@
         joinRoomButton.addEventListener('click', () => {
             const username = usernameInput.value.trim();
             const roomId = roomIdInput.value.trim();
-            if (username && roomId) {
-                window.location.href = `room.html?room=${encodeURIComponent(roomId)}&user=${encodeURIComponent(username)}`;
+            if (username && /^\d{6}$/.test(roomId)) {
+                window.location.href = `room.html?id=${encodeURIComponent(roomId)}&user=${encodeURIComponent(username)}`;
             }
         });
 
-        // Check URL for room ID
         const params = new URLSearchParams(window.location.search);
-        if (params.get('room')) {
-            roomIdInput.value = params.get('room');
+        if (params.get('id')) {
+            roomIdInput.value = params.get('id');
             validateInputs();
         }
     </script>
