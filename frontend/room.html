@@ -1,105 +1,181 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-  <!-- (Keep your head & style intact—omitted here for brevity) -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Callio – In Call</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --fg: #f8fafc;
+      --secondary: #334155;
+      --accent: #3b82f6;
+      --muted: #64748b;
+      --error: #ef4444;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--fg);
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .video-container {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    video {
+      width: 160px;
+      height: 160px;
+      background-color: var(--secondary);
+      border-radius: 12px;
+      object-fit: cover;
+    }
+
+    .controls {
+      display: flex;
+      gap: 16px;
+    }
+
+    button {
+      padding: 14px;
+      font-size: 18px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      background-color: var(--secondary);
+      color: var(--fg);
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      background-color: var(--accent);
+    }
+
+    #end-call {
+      background-color: var(--error);
+      color: white;
+    }
+
+    #end-call:hover {
+      background-color: #dc2626;
+    }
+
+    .label {
+      margin-bottom: 20px;
+      font-size: 20px;
+      font-weight: 600;
+    }
+  </style>
 </head>
 <body>
-  <!-- (Your existing body/UI) -->
+
+  <div class="label">In Call – Room <span id="room-name"></span></div>
+
+  <div class="video-container">
+    <video id="localVideo" autoplay muted playsinline></video>
+    <video id="remoteVideo" autoplay playsinline></video>
+  </div>
+
+  <div class="controls">
+    <button id="mic-toggle">🔇 Mute</button>
+    <button id="end-call">❌ End Call</button>
+  </div>
 
   <script>
-  const roomId = new URLSearchParams(window.location.search).get('id') || 'no-id';
-  const userName = localStorage.getItem('userName') || 'You';
+    const roomId = new URLSearchParams(window.location.search).get('id');
+    document.getElementById('room-name').textContent = roomId || '—';
 
-  // --- UI Elements
-  const micToggle = document.getElementById('mic-toggle');
-  const cameraToggle = document.getElementById('camera-toggle');
-  const endCallBtn = document.getElementById('end-call');
-  const localVideo = document.getElementById('local-video');
-  const remoteVideo = document.getElementById('remote-video');
-  const localAvatar = document.getElementById('local-avatar');
-  const remoteAvatar = document.getElementById('remote-avatar');
-  document.getElementById('local-name').textContent = userName;
-  document.getElementById('local-avatar-text').textContent = userName.charAt(0).toUpperCase();
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const micToggle = document.getElementById('mic-toggle');
+    const endCallBtn = document.getElementById('end-call');
 
-  // --- WebSocket Signaling
-  const socket = new WebSocket('wss://callio.onrender.com');
+    let localStream;
+    let peerConnection;
 
-  socket.addEventListener('open', () => {
-    console.log('🔌 WebSocket connected');
-    socket.send(JSON.stringify({ type: 'join', roomId }));
-  });
+    const socket = new WebSocket('wss://callio.onrender.com');
 
-  socket.addEventListener('message', async e => {
-    const msg = JSON.parse(e.data);
-    if (!pc) return;
+    socket.onopen = () => {
+      console.log('Connected to signaling server');
+      socket.send(JSON.stringify({ type: 'join', roomId }));
+    };
 
-    if (msg.type === 'signal') {
-      const data = msg.payload;
-      if (data.sdp) {
-        await pc.setRemoteDescription(data);
-        if (data.type === 'offer') {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.send(JSON.stringify({ type: 'signal', roomId, payload: pc.localDescription }));
+    socket.onmessage = async (event) => {
+      const message = JSON.parse(event.data);
+
+      if (!peerConnection) return;
+
+      if (message.type === 'signal') {
+        const payload = message.payload;
+
+        if (payload.sdp) {
+          await peerConnection.setRemoteDescription(payload);
+          if (payload.type === 'offer') {
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.send(JSON.stringify({ type: 'signal', roomId, payload: answer }));
+          }
         }
-      } else if (data.candidate) {
-        await pc.addIceCandidate(data);
+
+        if (payload.candidate) {
+          await peerConnection.addIceCandidate(payload);
+        }
       }
+    };
+
+    async function startCall() {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      localVideo.srcObject = localStream;
+
+      peerConnection = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+
+      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+      peerConnection.onicecandidate = event => {
+        if (event.candidate) {
+          socket.send(JSON.stringify({ type: 'signal', roomId, payload: event.candidate }));
+        }
+      };
+
+      peerConnection.ontrack = event => {
+        remoteVideo.srcObject = event.streams[0];
+      };
+
+      peerConnection.onnegotiationneeded = async () => {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.send(JSON.stringify({ type: 'signal', roomId, payload: offer }));
+      };
     }
-  });
 
-  // --- Set up WebRTC Peer Connection
-  let pc;
-  let localStream;
-
-  async function startMedia() {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    localVideo.srcObject = localStream;
-    joinCall();
-  }
-
-  function joinCall() {
-    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-    pc.onicecandidate = e => {
-      if (e.candidate) {
-        socket.send(JSON.stringify({ type: 'signal', roomId, payload: e.candidate }));
-      }
+    micToggle.onclick = () => {
+      const audioTrack = localStream.getAudioTracks()[0];
+      audioTrack.enabled = !audioTrack.enabled;
+      micToggle.textContent = audioTrack.enabled ? '🔇 Mute' : '🎤 Unmute';
     };
 
-    pc.ontrack = e => {
-      remoteVideo.srcObject = e.streams[0];
-      remoteAvatar.style.display = 'none';
-      remoteVideo.style.display = 'block';
+    endCallBtn.onclick = () => {
+      if (peerConnection) peerConnection.close();
+      socket.close();
+      window.location.href = 'index.html';
     };
 
-    socket.addEventListener('open', () => {}); // initial join
-    // Let server logic handle caller/callee roles
-
-    pc.onnegotiationneeded = async () => {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.send(JSON.stringify({ type: 'signal', roomId, payload: pc.localDescription }));
-    };
-  }
-
-  // --- Control Toggles
-  micToggle.addEventListener('click', () => {
-    const track = localStream.getAudioTracks()[0];
-    track.enabled = !(track.enabled);
-    micToggle.textContent = track.enabled ? '🎤' : '🔇';
-  });
-
-  cameraToggle.addEventListener('click', () => {
-    // optional: if you add video later
-  });
-
-  endCallBtn.addEventListener('click', () => location.href = 'index.html');
-  
-  // --- Start everything
-  startMedia().catch(console.error);
+    startCall().catch(err => {
+      alert('Error accessing microphone: ' + err.message);
+    });
   </script>
 </body>
 </html>
