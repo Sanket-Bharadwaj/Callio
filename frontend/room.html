@@ -1,160 +1,292 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Callio Room</title>
   <style>
-    * { margin:0;box-sizing:border-box; font-family:sans-serif; }
-    body { display:flex; flex-direction:column; height:100vh; background:#0f172a; color:#f1f5f9; }
-    header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#1e293b; }
-    header h2 { font-size:1rem; }
-    main { flex:1; display:flex; position:relative; background:#111827; justify-content:center; align-items:center; }
-    .video-large { position:relative; width:100%; max-width:800px; max-height:80%; }
-    video { width:100%; height:100%; background:black; border-radius:8px; object-fit:cover; }
-    .video-small { position:absolute; bottom:16px; right:16px; width:120px; height:90px; background:#1e293b; border-radius:8px; overflow:hidden; border:2px solid #334155; }
-    .controls { display:flex; justify-content:center; gap:12px; padding:12px; background:#1e293b; }
-    .controls button { background:#3b82f6; border:none; padding:8px 12px; color:white; font-size:1rem; border-radius:8px; cursor:pointer; }
-    #toasts { position: fixed; bottom:12px; right:12px; display:flex; flex-direction:column; gap:8px; }
-    .toast { background:#334155; padding:8px 12px; border-radius:6px; color:white; min-width:160px; }
-    #waitingOverlay { position:absolute; inset:0; background:rgba(0,0,0,0.7); display:flex; justify-content:center; align-items:center; color:#f1f5f9; font-size:1.2rem; visibility:hidden; }
-    .emoji-bar { display:flex; gap:8px; margin-top:8px; justify-content:center;}
-    .emoji-bar span { cursor:pointer; font-size:1.5rem; }
-    button:disabled { opacity:0.5; cursor:not-allowed; }
+    :root {
+      --bg-color: #0f172a;
+      --card-color: #1e293b;
+      --text-color: #f1f5f9;
+      --accent-color: #3b82f6;
+      --accent-hover: #2563eb;
+      --border-color: #334155;
+    }
+    body {
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      padding: 1rem 1.5rem;
+      background: var(--card-color);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    h2 {
+      font-size: 1rem;
+      margin: 0;
+      font-weight: 500;
+    }
+    #room-code {
+      color: var(--accent-color);
+      font-weight: bold;
+      font-size: 1rem;
+    }
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.5rem;
+      gap: 1.5rem;
+    }
+    .video-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    video {
+      width: 100%;
+      max-width: 500px;
+      border-radius: 12px;
+      border: 2px solid var(--border-color);
+      background: black;
+      aspect-ratio: 16 / 9;
+    }
+    .user-tag {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      text-align: center;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    button.control {
+      background: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.9rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button.control:hover {
+      background: var(--accent-hover);
+    }
+    #waiting {
+      margin-top: 1rem;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+    .toast {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: var(--card-color);
+      color: var(--text-color);
+      padding: 12px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      animation: fadeout 3s forwards;
+    }
+    @keyframes fadeout {
+      0% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { opacity: 0; transform: translateY(20px); }
+    }
+    .emoji-bar span {
+      font-size: 1.5rem;
+      cursor: pointer;
+      margin: 0 0.25rem;
+    }
   </style>
 </head>
 <body>
   <header>
-    <h2>Room: <span id="roomCode"></span></h2>
-    <button id="leaveBtn">🚪 Leave</button>
+    <h2>Room Code: <span id="room-code"></span></h2>
+    <button id="leave-btn" class="control">Leave</button>
   </header>
 
-  <main>
-    <div id="waitingOverlay">Waiting for someone to join...</div>
-    <div class="video-large"><video id="remoteVideo" autoplay playsinline></video></div>
-    <div class="video-small"><video id="localVideo" autoplay muted playsinline></video></div>
-  </main>
+  <section class="main">
+    <div class="video-container">
+      <video id="local-video" autoplay muted playsinline></video>
+      <div class="user-tag" id="local-name">You</div>
+    </div>
+
+    <div class="video-container">
+      <video id="remote-video" autoplay playsinline></video>
+      <div class="user-tag" id="remote-name">Waiting...</div>
+    </div>
+
+    <div id="waiting">⏳ Waiting for peer to join...</div>
+  </section>
 
   <div class="controls">
-    <button id="micBtn">🎤</button>
-    <button id="camBtn">📷</button>
-    <button id="audioOnlyBtn">🔈 Mode</button>
-    <button id="emojiBtn">😊</button>
-    <button id="shareBtn">🔗 Share</button>
+    <button id="mute-btn" class="control">Mute</button>
+    <button id="camera-btn" class="control">Hide Camera</button>
+    <button id="flip-btn" class="control">Flip Camera</button>
+    <button id="audio-only-btn" class="control">Audio Only</button>
+    <button id="emoji-btn" class="control">😊</button>
+    <button id="share-btn" class="control">Share</button>
   </div>
-  <div class="emoji-bar" id="emojiBar" style="display:none;">
-    <span onclick="sendEmoji('👍')">👍</span><span onclick="sendEmoji('👋')">👋</span><span onclick="sendEmoji('😂')">😂</span><span onclick="sendEmoji('😮')">😮</span>
+  <div class="emoji-bar" style="text-align:center; margin-top:0.5rem;">
+    <span onclick="sendEmoji('👍')">👍</span>
+    <span onclick="sendEmoji('😂')">😂</span>
+    <span onclick="sendEmoji('🔥')">🔥</span>
+    <span onclick="sendEmoji('😮')">😮</span>
   </div>
-  <div id="toasts"></div>
+  <div id="toast-area"></div>
 
   <script>
-    const logToast = msg => {
-      const t = document.createElement('div');
-      t.className='toast'; t.textContent=msg;
-      document.getElementById('toasts').append(t);
-      setTimeout(()=>t.remove(),3000);
-    };
+    const signalingServer = "wss://callio.onrender.com";
+    const ws = new WebSocket(signalingServer);
+    const roomId = new URLSearchParams(window.location.search).get("id");
+    const isCreator = localStorage.getItem("isCreator") === "true";
+    const userName = localStorage.getItem("userName") || "You";
 
-    const roomId = new URLSearchParams(location.search).get('id');
-    const userName = localStorage.getItem('userName') || 'You';
-    document.getElementById('roomCode').textContent = roomId;
+    document.getElementById("room-code").textContent = roomId;
+    document.getElementById("local-name").textContent = userName;
 
-    document.getElementById('leaveBtn').onclick = () => window.location.href = 'index.html';
-
-    document.getElementById('shareBtn').onclick = () => {
-      const link = `${location.origin}${location.pathname}?id=${roomId}`;
-      navigator.clipboard.writeText(link).then(() => logToast('Copied invite link'));
-    };
-
-    const micBtn = document.getElementById('micBtn');
-    const camBtn = document.getElementById('camBtn');
-    const audioOnlyBtn = document.getElementById('audioOnlyBtn');
-    const emojiBtn = document.getElementById('emojiBtn');
-    const emojiBar = document.getElementById('emojiBar');
-    let micOn = true, camOn = true, audioOnly=false;
-
-    micBtn.onclick = () => {
-      micOn = !micOn; localStream.getAudioTracks()[0].enabled = micOn;
-      micBtn.textContent = micOn ? '🎤' : '🔇';
-      logToast(micOn ? 'Microphone unmuted' : 'Microphone muted');
-    };
-    camBtn.onclick = () => {
-      camOn = !camOn; localStream.getVideoTracks()[0].enabled = camOn;
-      camBtn.textContent = camOn ? '📷' : '🚫';
-      logToast(camOn ? 'Camera on' : 'Camera off');
-    };
-    audioOnlyBtn.onclick = () => {
-      audioOnly = !audioOnly;
-      localStream.getVideoTracks()[0].enabled = !audioOnly;
-      audioOnlyBtn.textContent = audioOnly ? '🎧 Mode' : '🔈 Mode';
-      logToast(audioOnly ? 'Audio‑only mode' : 'Video mode');
-    };
-    emojiBtn.onclick = () => emojiBar.style.display = emojiBar.style.display==='none' ? 'flex' : 'none';
-
-    function sendEmoji(e) {
-      logToast(`You reacted: ${e}`);
-      ws.send(JSON.stringify({ type:'emoji', roomId, payload:e }));
-      emojiBar.style.display='none';
+    function showToast(msg) {
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      toast.textContent = msg;
+      document.getElementById("toast-area").appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
     }
 
-    const localVideo = document.getElementById('localVideo'),
-          remoteVideo = document.getElementById('remoteVideo'),
-          waiting = document.getElementById('waitingOverlay');
-
-    let localStream, peer, ws = new WebSocket('wss://callio.onrender.com');
-    const config = { iceServers:[{ urls:"stun:stun.l.google.com:19302" }] };
-
-    function checkWaiting() {
-      if(!remoteVideo.srcObject || remoteVideo.srcObject.getTracks().length===0) waiting.style.visibility = 'visible';
-      else waiting.style.visibility = 'hidden';
-    }
-
-    ws.onopen = () => ws.send(JSON.stringify({ type:'join', roomId, name:userName }));
-
-    ws.onmessage = async m => {
-      const msg = JSON.parse(m.data);
-      if(msg.type==='joined' && msg.name!==userName) {
-        logToast(`${msg.name} joined`);
-        createPeer(true, msg.name);
-      }
-      if(msg.type==='signal') {
-        if(!peer) createPeer(false,msg.from);
-        if(msg.payload.sdp){
-          await peer.setRemoteDescription(msg.payload.sdp);
-          if(msg.payload.sdp.type==='offer'){
-            const ans = await peer.createAnswer();
-            await peer.setLocalDescription(ans);
-            ws.send(JSON.stringify({ type:'signal', roomId, to:msg.from, payload:{ sdp:ans } }));
-          }
-        }
-        if(msg.payload.candidate) await peer.addIceCandidate(msg.payload.candidate);
-      }
-      if(msg.type==='emoji' && msg.payload) logToast(`${msg.from} reacted: ${msg.payload}`);
+    document.getElementById("share-btn").onclick = () => {
+      const link = `${window.location.origin}${window.location.pathname}?id=${roomId}`;
+      navigator.clipboard.writeText(link).then(() => showToast("Link copied!"));
+    };
+    document.getElementById("leave-btn").onclick = () => {
+      window.location.href = "index.html";
     };
 
-    function createPeer(isInitiator, remoteName) {
-      peer = new RTCPeerConnection(config);
-      localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+    let localStream, remoteStream, videoInputDeviceId = null;
+    const localVideo = document.getElementById("local-video");
+    const remoteVideo = document.getElementById("remote-video");
 
-      peer.ontrack = e => {
-        remoteVideo.srcObject = e.streams[0];
-        document.querySelector('header h2').textContent = `Room: ${roomId} • ${remoteName}`;
-        checkWaiting();
+    const peer = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    });
+
+    async function initStream() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(d => d.kind === "videoinput");
+      const constraints = {
+        video: videoInputDeviceId ? { deviceId: { exact: videoInputDeviceId } } : true,
+        audio: true
       };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      localStream = stream;
+      localVideo.srcObject = stream;
+      stream.getTracks().forEach(track => peer.addTrack(track, stream));
+    }
 
-      peer.onicecandidate = e => {
-        if(e.candidate) ws.send(JSON.stringify({ type:'signal', roomId, to:remoteName, payload:{ candidate:e.candidate } }));
-      };
+    initStream();
 
-      if(isInitiator) {
-        peer.createOffer().then(o=>peer.setLocalDescription(o)).then(()=>{
-          ws.send(JSON.stringify({ type:'signal', roomId, to:remoteName, payload:{ sdp:peer.localDescription } }));
+    peer.ontrack = (event) => {
+      if (!remoteStream) {
+        remoteStream = new MediaStream();
+        remoteVideo.srcObject = remoteStream;
+        document.getElementById("waiting").style.display = "none";
+        document.getElementById("remote-name").textContent = "Connected";
+      }
+      remoteStream.addTrack(event.track);
+    };
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        ws.send(JSON.stringify({
+          type: "signal",
+          roomId,
+          payload: { candidate: event.candidate }
+        }));
+      }
+    };
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "join", roomId, name: userName }));
+      if (isCreator) {
+        peer.createOffer().then(offer => {
+          peer.setLocalDescription(offer);
+          ws.send(JSON.stringify({ type: "signal", roomId, payload: { sdp: offer } }));
         });
       }
+    };
+
+    ws.onmessage = async (msg) => {
+      const { type, payload, from } = JSON.parse(msg.data);
+      if (type === "signal") {
+        if (payload.sdp) {
+          await peer.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+          if (payload.sdp.type === "offer") {
+            const answer = await peer.createAnswer();
+            await peer.setLocalDescription(answer);
+            ws.send(JSON.stringify({ type: "signal", roomId, payload: { sdp: answer } }));
+          }
+        }
+        if (payload.candidate) {
+          await peer.addIceCandidate(new RTCIceCandidate(payload.candidate));
+        }
+      }
+      if (type === "emoji") {
+        showToast(`${from || "Peer"} reacted: ${payload}`);
+      }
+    };
+
+    function sendEmoji(emoji) {
+      ws.send(JSON.stringify({ type: "emoji", roomId, payload: emoji, from: userName }));
+      showToast(`You sent: ${emoji}`);
     }
 
-    navigator.mediaDevices.getUserMedia({ video:true, audio:true })
-      .then(s => { localStream = s; localVideo.srcObject = s; checkWaiting(); })
-      .catch(e=>alert('Mic/cam error: '+e));
+    // Controls
+    let micOn = true, camOn = true;
+
+    document.getElementById("mute-btn").onclick = () => {
+      micOn = !micOn;
+      localStream.getAudioTracks()[0].enabled = micOn;
+      document.getElementById("mute-btn").textContent = micOn ? "Mute" : "Unmute";
+    };
+
+    document.getElementById("camera-btn").onclick = () => {
+      camOn = !camOn;
+      localStream.getVideoTracks()[0].enabled = camOn;
+      document.getElementById("camera-btn").textContent = camOn ? "Hide Camera" : "Show Camera";
+    };
+
+    document.getElementById("audio-only-btn").onclick = () => {
+      localStream.getVideoTracks()[0].enabled = false;
+      showToast("Switched to audio-only mode.");
+    };
+
+    document.getElementById("flip-btn").onclick = async () => {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(d => d.kind === "videoinput");
+      if (videoDevices.length > 1) {
+        const currentIndex = videoDevices.findIndex(d => d.deviceId === videoInputDeviceId);
+        const nextDevice = videoDevices[(currentIndex + 1) % videoDevices.length];
+        videoInputDeviceId = nextDevice.deviceId;
+        localStream.getTracks().forEach(t => t.stop());
+        peer.getSenders().forEach(s => peer.removeTrack(s));
+        initStream();
+        showToast("Switched camera");
+      }
+    };
   </script>
 </body>
 </html>
