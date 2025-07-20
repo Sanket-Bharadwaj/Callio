@@ -1,232 +1,160 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Callio Room</title>
   <style>
-    :root {
-      --bg-color: #0f172a;
-      --card-color: #1e293b;
-      --text-color: #f1f5f9;
-      --accent-color: #3b82f6;
-      --accent-hover: #2563eb;
-      --border-color: #334155;
-    }
-    body {
-      background: var(--bg-color);
-      color: var(--text-color);
-      font-family: 'Inter', sans-serif;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-    header {
-      padding: 1rem 1.5rem;
-      background: var(--card-color);
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    h2 {
-      font-size: 1rem;
-      margin: 0;
-      font-weight: 500;
-    }
-    #room-code {
-      color: var(--accent-color);
-      font-weight: bold;
-      font-size: 1rem;
-    }
-    #share-btn {
-      padding: 0.5rem 1rem;
-      background: var(--accent-color);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.875rem;
-      cursor: pointer;
-    }
-    #share-btn:hover {
-      background: var(--accent-hover);
-    }
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 1.5rem;
-      gap: 1.5rem;
-    }
-    .video-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      max-width: 100%;
-      width: 100%;
-      gap: 0.5rem;
-    }
-    video {
-      width: 100%;
-      max-width: 500px;
-      border-radius: 12px;
-      border: 2px solid var(--border-color);
-      background: black;
-      aspect-ratio: 16 / 9;
-    }
-    .user-tag {
-      font-size: 0.875rem;
-      color: #94a3b8;
-      text-align: center;
-    }
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 1rem;
-      margin-top: 1rem;
-    }
-    button.control {
-      background: var(--accent-color);
-      color: white;
-      border: none;
-      padding: 0.75rem 1.25rem;
-      font-size: 0.9rem;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    button.control:hover {
-      background: var(--accent-hover);
-    }
-
-    @media (min-width: 768px) {
-      .main {
-        flex-direction: row;
-        justify-content: space-around;
-        align-items: flex-start;
-      }
-      .video-container {
-        width: 45%;
-      }
-    }
+    * { margin:0;box-sizing:border-box; font-family:sans-serif; }
+    body { display:flex; flex-direction:column; height:100vh; background:#0f172a; color:#f1f5f9; }
+    header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#1e293b; }
+    header h2 { font-size:1rem; }
+    main { flex:1; display:flex; position:relative; background:#111827; justify-content:center; align-items:center; }
+    .video-large { position:relative; width:100%; max-width:800px; max-height:80%; }
+    video { width:100%; height:100%; background:black; border-radius:8px; object-fit:cover; }
+    .video-small { position:absolute; bottom:16px; right:16px; width:120px; height:90px; background:#1e293b; border-radius:8px; overflow:hidden; border:2px solid #334155; }
+    .controls { display:flex; justify-content:center; gap:12px; padding:12px; background:#1e293b; }
+    .controls button { background:#3b82f6; border:none; padding:8px 12px; color:white; font-size:1rem; border-radius:8px; cursor:pointer; }
+    #toasts { position: fixed; bottom:12px; right:12px; display:flex; flex-direction:column; gap:8px; }
+    .toast { background:#334155; padding:8px 12px; border-radius:6px; color:white; min-width:160px; }
+    #waitingOverlay { position:absolute; inset:0; background:rgba(0,0,0,0.7); display:flex; justify-content:center; align-items:center; color:#f1f5f9; font-size:1.2rem; visibility:hidden; }
+    .emoji-bar { display:flex; gap:8px; margin-top:8px; justify-content:center;}
+    .emoji-bar span { cursor:pointer; font-size:1.5rem; }
+    button:disabled { opacity:0.5; cursor:not-allowed; }
   </style>
 </head>
 <body>
   <header>
-    <h2>Room Code: <span id="room-code"></span></h2>
-    <button id="share-btn">Share</button>
+    <h2>Room: <span id="roomCode"></span></h2>
+    <button id="leaveBtn">🚪 Leave</button>
   </header>
 
-  <section class="main">
-    <div class="video-container">
-      <video id="local-video" autoplay muted playsinline></video>
-      <div class="user-tag" id="local-name">You</div>
-    </div>
-
-    <div class="video-container">
-      <video id="remote-video" autoplay playsinline></video>
-      <div class="user-tag" id="remote-name">Connected User</div>
-    </div>
-  </section>
+  <main>
+    <div id="waitingOverlay">Waiting for someone to join...</div>
+    <div class="video-large"><video id="remoteVideo" autoplay playsinline></video></div>
+    <div class="video-small"><video id="localVideo" autoplay muted playsinline></video></div>
+  </main>
 
   <div class="controls">
-    <button id="mute-btn" class="control">Mute</button>
-    <button id="camera-btn" class="control">Hide Camera</button>
+    <button id="micBtn">🎤</button>
+    <button id="camBtn">📷</button>
+    <button id="audioOnlyBtn">🔈 Mode</button>
+    <button id="emojiBtn">😊</button>
+    <button id="shareBtn">🔗 Share</button>
   </div>
+  <div class="emoji-bar" id="emojiBar" style="display:none;">
+    <span onclick="sendEmoji('👍')">👍</span><span onclick="sendEmoji('👋')">👋</span><span onclick="sendEmoji('😂')">😂</span><span onclick="sendEmoji('😮')">😮</span>
+  </div>
+  <div id="toasts"></div>
 
   <script>
-    const signalingServer = "wss://callio.onrender.com";
-    const ws = new WebSocket(signalingServer);
-    const roomId = new URLSearchParams(window.location.search).get("id");
-    const isCreator = localStorage.getItem("isCreator") === "true";
-    const userName = localStorage.getItem("userName") || "You";
-
-    document.getElementById("room-code").textContent = roomId;
-    document.getElementById("local-name").textContent = userName;
-
-    document.getElementById("share-btn").onclick = () => {
-      const link = `${window.location.origin}${window.location.pathname}?id=${roomId}`;
-      navigator.clipboard.writeText(link).then(() => {
-        alert("Room link copied:\n" + link);
-      });
+    const logToast = msg => {
+      const t = document.createElement('div');
+      t.className='toast'; t.textContent=msg;
+      document.getElementById('toasts').append(t);
+      setTimeout(()=>t.remove(),3000);
     };
 
-    let localStream, remoteStream;
-    const localVideo = document.getElementById("local-video");
-    const remoteVideo = document.getElementById("remote-video");
+    const roomId = new URLSearchParams(location.search).get('id');
+    const userName = localStorage.getItem('userName') || 'You';
+    document.getElementById('roomCode').textContent = roomId;
 
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
+    document.getElementById('leaveBtn').onclick = () => window.location.href = 'index.html';
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
-      localStream = stream;
-      localVideo.srcObject = stream;
-      stream.getTracks().forEach(track => peer.addTrack(track, stream));
-    });
+    document.getElementById('shareBtn').onclick = () => {
+      const link = `${location.origin}${location.pathname}?id=${roomId}`;
+      navigator.clipboard.writeText(link).then(() => logToast('Copied invite link'));
+    };
 
-    peer.ontrack = (event) => {
-      if (!remoteStream) {
-        remoteStream = new MediaStream();
-        remoteVideo.srcObject = remoteStream;
+    const micBtn = document.getElementById('micBtn');
+    const camBtn = document.getElementById('camBtn');
+    const audioOnlyBtn = document.getElementById('audioOnlyBtn');
+    const emojiBtn = document.getElementById('emojiBtn');
+    const emojiBar = document.getElementById('emojiBar');
+    let micOn = true, camOn = true, audioOnly=false;
+
+    micBtn.onclick = () => {
+      micOn = !micOn; localStream.getAudioTracks()[0].enabled = micOn;
+      micBtn.textContent = micOn ? '🎤' : '🔇';
+      logToast(micOn ? 'Microphone unmuted' : 'Microphone muted');
+    };
+    camBtn.onclick = () => {
+      camOn = !camOn; localStream.getVideoTracks()[0].enabled = camOn;
+      camBtn.textContent = camOn ? '📷' : '🚫';
+      logToast(camOn ? 'Camera on' : 'Camera off');
+    };
+    audioOnlyBtn.onclick = () => {
+      audioOnly = !audioOnly;
+      localStream.getVideoTracks()[0].enabled = !audioOnly;
+      audioOnlyBtn.textContent = audioOnly ? '🎧 Mode' : '🔈 Mode';
+      logToast(audioOnly ? 'Audio‑only mode' : 'Video mode');
+    };
+    emojiBtn.onclick = () => emojiBar.style.display = emojiBar.style.display==='none' ? 'flex' : 'none';
+
+    function sendEmoji(e) {
+      logToast(`You reacted: ${e}`);
+      ws.send(JSON.stringify({ type:'emoji', roomId, payload:e }));
+      emojiBar.style.display='none';
+    }
+
+    const localVideo = document.getElementById('localVideo'),
+          remoteVideo = document.getElementById('remoteVideo'),
+          waiting = document.getElementById('waitingOverlay');
+
+    let localStream, peer, ws = new WebSocket('wss://callio.onrender.com');
+    const config = { iceServers:[{ urls:"stun:stun.l.google.com:19302" }] };
+
+    function checkWaiting() {
+      if(!remoteVideo.srcObject || remoteVideo.srcObject.getTracks().length===0) waiting.style.visibility = 'visible';
+      else waiting.style.visibility = 'hidden';
+    }
+
+    ws.onopen = () => ws.send(JSON.stringify({ type:'join', roomId, name:userName }));
+
+    ws.onmessage = async m => {
+      const msg = JSON.parse(m.data);
+      if(msg.type==='joined' && msg.name!==userName) {
+        logToast(`${msg.name} joined`);
+        createPeer(true, msg.name);
       }
-      remoteStream.addTrack(event.track);
-    };
-
-    peer.onicecandidate = (event) => {
-      if (event.candidate) {
-        ws.send(JSON.stringify({
-          type: "signal",
-          roomId,
-          payload: { candidate: event.candidate }
-        }));
-      }
-    };
-
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "join", roomId }));
-      if (isCreator) {
-        peer.createOffer().then(offer => {
-          peer.setLocalDescription(offer);
-          ws.send(JSON.stringify({ type: "signal", roomId, payload: { sdp: offer } }));
-        });
-      }
-    };
-
-    ws.onmessage = async (msg) => {
-      const { type, payload } = JSON.parse(msg.data);
-      if (type === "signal") {
-        if (payload.sdp) {
-          await peer.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          if (payload.sdp.type === "offer") {
-            const answer = await peer.createAnswer();
-            await peer.setLocalDescription(answer);
-            ws.send(JSON.stringify({ type: "signal", roomId, payload: { sdp: answer } }));
+      if(msg.type==='signal') {
+        if(!peer) createPeer(false,msg.from);
+        if(msg.payload.sdp){
+          await peer.setRemoteDescription(msg.payload.sdp);
+          if(msg.payload.sdp.type==='offer'){
+            const ans = await peer.createAnswer();
+            await peer.setLocalDescription(ans);
+            ws.send(JSON.stringify({ type:'signal', roomId, to:msg.from, payload:{ sdp:ans } }));
           }
         }
-        if (payload.candidate) {
-          await peer.addIceCandidate(new RTCIceCandidate(payload.candidate));
-        }
+        if(msg.payload.candidate) await peer.addIceCandidate(msg.payload.candidate);
       }
+      if(msg.type==='emoji' && msg.payload) logToast(`${msg.from} reacted: ${msg.payload}`);
     };
 
-    // Controls
-    let micOn = true;
-    let camOn = true;
+    function createPeer(isInitiator, remoteName) {
+      peer = new RTCPeerConnection(config);
+      localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
 
-    document.getElementById("mute-btn").onclick = () => {
-      micOn = !micOn;
-      localStream.getAudioTracks()[0].enabled = micOn;
-      document.getElementById("mute-btn").textContent = micOn ? "Mute" : "Unmute";
-    };
+      peer.ontrack = e => {
+        remoteVideo.srcObject = e.streams[0];
+        document.querySelector('header h2').textContent = `Room: ${roomId} • ${remoteName}`;
+        checkWaiting();
+      };
 
-    document.getElementById("camera-btn").onclick = () => {
-      camOn = !camOn;
-      localStream.getVideoTracks()[0].enabled = camOn;
-      document.getElementById("camera-btn").textContent = camOn ? "Hide Camera" : "Show Camera";
-    };
+      peer.onicecandidate = e => {
+        if(e.candidate) ws.send(JSON.stringify({ type:'signal', roomId, to:remoteName, payload:{ candidate:e.candidate } }));
+      };
+
+      if(isInitiator) {
+        peer.createOffer().then(o=>peer.setLocalDescription(o)).then(()=>{
+          ws.send(JSON.stringify({ type:'signal', roomId, to:remoteName, payload:{ sdp:peer.localDescription } }));
+        });
+      }
+    }
+
+    navigator.mediaDevices.getUserMedia({ video:true, audio:true })
+      .then(s => { localStream = s; localVideo.srcObject = s; checkWaiting(); })
+      .catch(e=>alert('Mic/cam error: '+e));
   </script>
 </body>
 </html>
