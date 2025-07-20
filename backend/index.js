@@ -1,4 +1,3 @@
-// index.js
 const WebSocket = require('ws');
 const http = require('http');
 
@@ -11,6 +10,7 @@ const rooms = {}; // roomId => Set of clients
 
 wss.on('connection', (ws) => {
     let currentRoom = null;
+    let username = '';
 
     ws.on('message', (message) => {
         let data;
@@ -25,22 +25,34 @@ wss.on('connection', (ws) => {
 
         switch (type) {
             case 'join':
+                if (!/^\d{6}$/.test(roomId)) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Room ID must be a 6-digit number' }));
+                    return;
+                }
                 currentRoom = roomId;
+                username = payload.username;
                 if (!rooms[roomId]) {
                     rooms[roomId] = new Set();
                 }
                 rooms[roomId].add(ws);
-                console.log(`Client joined room: ${roomId}`);
+                console.log(`Client ${username} joined room: ${roomId}`);
+                rooms[roomId].forEach(client => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: 'signal',
+                            payload: { type: 'new-peer', peerId: generatePeerId(), username }
+                        }));
+                    }
+                });
                 break;
 
             case 'signal':
-                // Broadcast to all other peers in the same room
                 if (rooms[currentRoom]) {
                     rooms[currentRoom].forEach(client => {
                         if (client !== ws && client.readyState === WebSocket.OPEN) {
                             client.send(JSON.stringify({
                                 type: 'signal',
-                                payload
+                                payload: { ...payload, username }
                             }));
                         }
                     });
@@ -58,10 +70,14 @@ wss.on('connection', (ws) => {
             if (rooms[currentRoom].size === 0) {
                 delete rooms[currentRoom];
             }
-            console.log(`Client left room: ${currentRoom}`);
+            console.log(`Client ${username} left room: ${currentRoom}`);
         }
     });
 });
+
+function generatePeerId() {
+    return Math.random().toString(36).substr(2, 9);
+}
 
 server.listen(PORT, () => {
     console.log(`WebSocket signaling server running on port ${PORT}`);
