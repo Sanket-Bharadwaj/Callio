@@ -1,247 +1,159 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Callio Room</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
   <style>
-    :root {
-      --bg: #0f172a;
-      --panel: #1e293b;
-      --text: #f1f5f9;
-      --subtext: #94a3b8;
-      --border: #334155;
-      --accent: #3b82f6;
-      --accent-hover: #2563eb;
-    }
-
-    * {
-      margin: 0; padding: 0; box-sizing: border-box;
-    }
-
     body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: 'Inter', sans-serif;
-      min-height: 100vh;
+      background: #0f172a;
+      color: white;
+      font-family: sans-serif;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      padding: 1rem;
+      background: #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #localName {
+      font-weight: bold;
+    }
+    main {
+      flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
-    }
-
-    header {
-      font-size: 1.5rem;
-      font-weight: 600;
-      margin-bottom: 10px;
-    }
-
-    .room-id {
-      font-size: 0.9rem;
-      color: var(--subtext);
-      margin-bottom: 24px;
-    }
-
-    .video-grid {
-      display: flex;
-      flex-wrap: wrap;
       justify-content: center;
-      gap: 16px;
-      margin-bottom: 24px;
+      gap: 1rem;
+      padding: 1rem;
     }
-
-    .video-box {
-      background: var(--panel);
-      padding: 12px;
-      border-radius: 12px;
-      text-align: center;
-      border: 1px solid var(--border);
-      max-width: 300px;
-    }
-
     video {
       width: 100%;
-      max-height: 250px;
+      max-width: 320px;
       border-radius: 8px;
       background: black;
     }
-
-    .user-tag {
-      margin-top: 8px;
-      font-size: 0.9rem;
-      color: var(--subtext);
-    }
-
     .controls {
+      margin-top: 1rem;
       display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
+      gap: 1rem;
     }
-
     button {
-      background: var(--accent);
+      padding: 0.6rem 1rem;
+      background: #3b82f6;
       color: white;
-      padding: 10px 16px;
       border: none;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      font-weight: 500;
+      border-radius: 6px;
       cursor: pointer;
-      transition: background 0.2s ease;
-    }
-
-    button:hover {
-      background: var(--accent-hover);
-    }
-
-    @media (max-width: 600px) {
-      .controls {
-        flex-direction: column;
-        width: 100%;
-      }
-
-      button {
-        width: 100%;
-      }
     }
   </style>
 </head>
 <body>
-  <header>Callio</header>
-  <div class="room-id" id="room-id-display">Room: ...</div>
+  <header>
+    <span id="localName">You</span>
+    <button id="shareBtn">🔗 Share</button>
+  </header>
 
-  <div class="video-grid">
-    <div class="video-box">
-      <video id="local-video" autoplay muted playsinline></video>
-      <div class="user-tag" id="local-name">You</div>
+  <main>
+    <video id="localVideo" autoplay muted playsinline></video>
+    <video id="remoteVideo" autoplay playsinline></video>
+    <div class="controls">
+      <button id="toggleAudio">🎙️ Mute</button>
+      <button id="toggleVideo">📷 Hide</button>
     </div>
-    <div class="video-box">
-      <video id="remote-video" autoplay playsinline></video>
-      <div class="user-tag" id="remote-name">Waiting...</div>
-    </div>
-  </div>
-
-  <div class="controls">
-    <button id="mute-btn">🎤 Mute</button>
-    <button id="camera-btn">🎥 Hide Cam</button>
-    <button id="share-btn">🔗 Share</button>
-    <button onclick="window.location.href='index.html'">🚪 Leave</button>
-  </div>
+  </main>
 
   <script>
-    const roomId = new URLSearchParams(window.location.search).get('id') || 'default';
-    const userName = localStorage.getItem('userName') || 'Anonymous';
-    const isCreator = localStorage.getItem('isCreator') === 'true';
+    const ws = new WebSocket("wss://callio.onrender.com");
+    const urlParams = new URLSearchParams(location.search);
+    const roomId = urlParams.get("id");
+    const userName = localStorage.getItem("userName") || "Guest";
 
-    document.getElementById('room-id-display').textContent = 'Room: ' + roomId;
-    document.getElementById('local-name').textContent = userName;
-
-    const localVideo = document.getElementById('local-video');
-    const remoteVideo = document.getElementById('remote-video');
-    const remoteName = document.getElementById('remote-name');
-
-    let localStream;
-    let peerConnection;
-    const ws = new WebSocket('wss://callio.onrender.com');
-
-    const config = {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    document.getElementById("localName").textContent = userName;
+    document.getElementById("shareBtn").onclick = () => {
+      const fullUrl = `${location.origin}${location.pathname}?id=${roomId}`;
+      navigator.clipboard.writeText(fullUrl).then(() => {
+        alert("Link copied!");
+      });
     };
 
-    navigator.mediaDevices.getUserMedia({ audio: true, video: true })
-      .then(stream => {
-        localStream = stream;
-        localVideo.srcObject = stream;
-      })
-      .catch(err => alert('Error accessing mic/cam: ' + err));
+    let localStream, peer;
+    const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-    ws.addEventListener('open', () => {
-      ws.send(JSON.stringify({ type: 'join', roomId }));
-    });
+    const localVideo = document.getElementById("localVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
 
-    ws.addEventListener('message', async (message) => {
-      const data = JSON.parse(message.data);
+    async function init() {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localVideo.srcObject = localStream;
 
-      if (data.type === 'signal') {
-        const signal = data.payload;
+      peer = new RTCPeerConnection(config);
 
-        if (signal.sdp) {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-          if (signal.sdp.type === 'offer') {
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            sendSignal({ sdp: answer });
+      localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+
+      peer.ontrack = event => {
+        remoteVideo.srcObject = event.streams[0];
+      };
+
+      peer.onicecandidate = event => {
+        if (event.candidate) {
+          ws.send(JSON.stringify({ type: "signal", roomId, payload: { candidate: event.candidate } }));
+        }
+      };
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: "join", roomId }));
+      };
+
+      ws.onmessage = async (msg) => {
+        const { type, payload } = JSON.parse(msg.data);
+        if (type === "signal") {
+          if (payload.offer) {
+            await peer.setRemoteDescription(new RTCSessionDescription(payload.offer));
+            const answer = await peer.createAnswer();
+            await peer.setLocalDescription(answer);
+            ws.send(JSON.stringify({ type: "signal", roomId, payload: { answer } }));
+          } else if (payload.answer) {
+            await peer.setRemoteDescription(new RTCSessionDescription(payload.answer));
+          } else if (payload.candidate) {
+            try {
+              await peer.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            } catch (e) {
+              console.error("Error adding ice candidate", e);
+            }
           }
         }
-
-        if (signal.candidate) {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate));
-        }
-      }
-    });
-
-    function sendSignal(payload) {
-      ws.send(JSON.stringify({
-        type: 'signal',
-        roomId,
-        payload
-      }));
-    }
-
-    function initConnection() {
-      peerConnection = new RTCPeerConnection(config);
-
-      localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-      });
-
-      peerConnection.ontrack = (event) => {
-        remoteVideo.srcObject = event.streams[0];
-        remoteName.textContent = 'Connected User';
       };
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendSignal({ candidate: event.candidate });
-        }
-      };
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      ws.send(JSON.stringify({ type: "signal", roomId, payload: { offer } }));
     }
 
-    // Wait a moment to ensure WS and stream is ready
-    setTimeout(async () => {
-      initConnection();
+    init();
 
-      if (isCreator) {
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        sendSignal({ sdp: offer });
-      }
-    }, 1000);
+    // Controls
+    let audioEnabled = true;
+    let videoEnabled = true;
 
-    // Button Events
-    document.getElementById('mute-btn').addEventListener('click', () => {
-      const enabled = localStream.getAudioTracks()[0].enabled;
-      localStream.getAudioTracks()[0].enabled = !enabled;
-      document.getElementById('mute-btn').textContent = enabled ? '🔇 Unmute' : '🎤 Mute';
-    });
+    document.getElementById("toggleAudio").onclick = () => {
+      audioEnabled = !audioEnabled;
+      localStream.getAudioTracks()[0].enabled = audioEnabled;
+      document.getElementById("toggleAudio").textContent = audioEnabled ? "🎙️ Mute" : "🔇 Unmute";
+    };
 
-    document.getElementById('camera-btn').addEventListener('click', () => {
-      const enabled = localStream.getVideoTracks()[0].enabled;
-      localStream.getVideoTracks()[0].enabled = !enabled;
-      document.getElementById('camera-btn').textContent = enabled ? '📷 Show Cam' : '🎥 Hide Cam';
-    });
-
-    document.getElementById('share-btn').addEventListener('click', async () => {
-      const url = window.location.href;
-      try {
-        await navigator.clipboard.writeText(url);
-        alert('Room link copied!');
-      } catch {
-        alert('Copy manually:\n' + url);
-      }
-    });
+    document.getElementById("toggleVideo").onclick = () => {
+      videoEnabled = !videoEnabled;
+      localStream.getVideoTracks()[0].enabled = videoEnabled;
+      document.getElementById("toggleVideo").textContent = videoEnabled ? "📷 Hide" : "📷 Show";
+    };
   </script>
 </body>
 </html>
