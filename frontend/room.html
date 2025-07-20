@@ -7,14 +7,13 @@
   <style>
     body { margin:0; font-family:sans-serif; background:#0f172a; color:#f1f5f9; display:flex; flex-direction:column; height:100vh }
     header { background:#1e293b; padding:1rem; display:flex; justify-content:space-between; align-items:center }
-    header h2 { margin:0; font-size:1rem; }
-    #videos { flex:1; display:flex; flex-wrap:wrap; gap:1rem; justify-content:center; align-items:center; padding:1rem; overflow:auto }
+    #videos { flex:1; display:flex; flex-wrap:wrap; gap:1rem; justify-content:center; align-items:center; overflow:auto; padding:1rem }
     .video-box { position:relative; }
-    .video-box video { width:280px; height:200px; background:black; border-radius:10px }
+    .video-box video { width:280px; height:200px; background:black; border-radius:10px; }
     .video-box .label { position:absolute; bottom:5px; left:5px; font-size:0.75rem; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:4px }
-    footer { background:#1e293b; padding:0.75rem; display:flex; gap:10px; justify-content:center }
+    footer { background:#1e293b; padding:.75rem; display:flex; gap:10px; justify-content:center }
     button { background:#3b82f6; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer }
-    .toast { position:fixed; bottom:10px; right:10px; background:#1e293b; padding:10px; border-radius:8px; color:white; display:none }
+    .toast { position:fixed; bottom:10px; right:10px; background:#1e293b; padding:10px; border-radius:8px; display:none }
     .emoji { position:absolute; font-size:2rem; animation:fadeout 1.2s forwards }
     @keyframes fadeout { to { opacity:0; transform:translateY(-20px) } }
   </style>
@@ -37,17 +36,17 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const ws = new WebSocket("wss://callio.onrender.com"); // update if using localhost
     const roomId = new URLSearchParams(location.search).get("id");
     document.getElementById("room-id").textContent = roomId;
 
-    const userName = localStorage.getItem("userName") || prompt("Your name?");
+    const ws = new WebSocket("wss://callio.onrender.com");
+    const userName = localStorage.getItem("userName") || prompt("Name?") || "You";
     localStorage.setItem("userName", userName);
 
-    const peers = {}, videoElems = {}, streams = {};
-    let localStream = null, micOn = true, camOn = true, currentCamId = null;
+    let localStream, currentCamId;
+    const peers = {}, videoElems = {};
 
-    const videoContainer = document.getElementById("videos");
+    const container = document.getElementById("videos");
     const toast = document.getElementById("toast");
 
     function showToast(msg) {
@@ -56,7 +55,7 @@
       setTimeout(() => toast.style.display = "none", 3000);
     }
 
-    function addVideo(name, stream, isLocal) {
+    function addVideo(name, stream, isLocal = false) {
       if (videoElems[name]) return;
       const box = document.createElement("div");
       box.className = "video-box";
@@ -67,144 +66,137 @@
       const label = document.createElement("div");
       label.className = "label";
       label.textContent = name;
-      box.appendChild(v);
-      box.appendChild(label);
-      videoContainer.appendChild(box);
-      videoElems[name] = box;
-      streams[name] = stream;
+      box.append(v, label);
+      container.appendChild(box);
+      videoElems[name] = { box, video: v, stream };
+      v.play().catch(console.error);
     }
 
-    function showEmojiOn(name, emoji) {
-      const box = videoElems[name];
-      if (!box) return;
-      const e = document.createElement("div");
-      e.className = "emoji";
-      e.textContent = emoji;
-      box.appendChild(e);
-      setTimeout(() => e.remove(), 1200);
+    function createPeer(targetUser) {
+      if (peers[targetUser]) return peers[targetUser];
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }]});
+
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+      pc.onicecandidate = e => {
+        if (e.candidate) {
+          ws.send(JSON.stringify({ type: "signal", roomId, to: targetUser, from: userName, payload:{candidate:e.candidate}}));
+        }
+      };
+
+      pc.ontrack = e => {
+        const stream = e.streams[0] || new MediaStream();
+        if (e.streams.length===0) stream.addTrack(e.track);
+        addVideo(targetUser, stream);
+      };
+
+      peers[targetUser] = pc;
+      return pc;
     }
 
-    async function initMedia() {
+    ws.onopen = async () => {
+      showToast("Connected to signaling");
+      await initLocal();
+      ws.send(JSON.stringify({ type:"join", roomId, from: userName }));
+    };
+
+    ws.onmessage = async ({data}) => {
+      const msg = JSON.parse(data);
+      if (msg.type === "joined") {
+        msg.members.forEach(member => {
+          if (member !== userName) {
+            const pc = createPeer(member);
+            pc.createOffer().then(o => {
+              pc.setLocalDescription(o);
+              ws.send(JSON.stringify({ type:"signal", roomId, to: member, from:userName, payload:{sdp:o}}));
+            });
+          }
+        });
+      }
+      if (msg.type === "signal" && msg.from) {
+        const pc = createPeer(msg.from);
+        if (msg.payload.sdp) {
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.payload.sdp));
+          if (msg.payload.sdp.type === "offer") {
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            ws.send(JSON.stringify({ type:"signal", roomId, to:msg.from, from:userName, payload:{sdp:ans}}));
+          }
+        }
+        if (msg.payload.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(msg.payload.candidate));
+        }
+      }
+      if (msg.type === "signal" && msg.payload.emoji) {
+        const elem = videoElems[msg.from];
+        if (elem) {
+          const e = document.createElement("div");
+          e.className = "emoji"; e.textContent = msg.payload.emoji;
+          elem.box.appendChild(e);
+          setTimeout(() => e.remove(),1200);
+        }
+      }
+    };
+
+    ws.onerror = e => showToast("WebSocket error");
+    ws.onclose = () => showToast("Disconnected");
+
+    async function initLocal() {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cams = devices.filter(d => d.kind === "videoinput");
       currentCamId = cams[0]?.deviceId;
-
       localStream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: currentCamId } },
+        video: currentCamId ? {deviceId:{exact:currentCamId}} : true,
         audio: true
       });
       addVideo(userName, localStream, true);
     }
 
-    function createPeer() {
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-      });
-
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-      pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          ws.send(JSON.stringify({ type: "signal", roomId, payload: { candidate: e.candidate } }));
-        }
-      };
-
-      pc.ontrack = (e) => {
-        const stream = new MediaStream();
-        stream.addTrack(e.track);
-        addVideo("Remote", stream, false);
-      };
-
-      return pc;
-    }
-
-    ws.onopen = async () => {
-      await initMedia();
-      ws.send(JSON.stringify({ type: "join", roomId }));
-    };
-
-    ws.onmessage = async (msg) => {
-      const data = JSON.parse(msg.data);
-      if (data.type === "signal" && data.payload) {
-        const pc = peers["peer"] || (peers["peer"] = createPeer());
-        if (data.payload.sdp) {
-          await pc.setRemoteDescription(new RTCSessionDescription(data.payload.sdp));
-          if (data.payload.sdp.type === "offer") {
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            ws.send(JSON.stringify({ type: "signal", roomId, payload: { sdp: answer } }));
-          }
-        }
-        if (data.payload.candidate) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(data.payload.candidate));
-          } catch (e) { console.error(e); }
-        }
-      }
-    };
-
     document.getElementById("mic-btn").onclick = () => {
-      micOn = !micOn;
-      localStream.getAudioTracks().forEach(t => t.enabled = micOn);
-      showToast(micOn ? "Mic On" : "Mic Off");
+      localStream.getAudioTracks()[0].enabled = !localStream.getAudioTracks()[0].enabled;
+      showToast(localStream.getAudioTracks()[0].enabled ? "Mic On" : "Mic Off");
     };
 
     document.getElementById("cam-btn").onclick = () => {
-      camOn = !camOn;
-      localStream.getVideoTracks().forEach(t => t.enabled = camOn);
-      showToast(camOn ? "Camera On" : "Camera Off");
+      localStream.getVideoTracks()[0].enabled = !localStream.getVideoTracks()[0].enabled;
+      showToast(localStream.getVideoTracks()[0].enabled ? "Cam On" : "Cam Off");
     };
 
     async function flipCamera() {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cams = devices.filter(d => d.kind === "videoinput");
       const idx = cams.findIndex(c => c.deviceId === currentCamId);
-      currentCamId = cams[(idx + 1) % cams.length].deviceId;
+      currentCamId = cams[(idx+1)%cams.length].deviceId;
 
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: currentCamId } },
-        audio: true
+      const newStream = await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:currentCamId}}, audio:true});
+      const videoTrack=newStream.getVideoTracks()[0];
+      const audioTrack=newStream.getAudioTracks()[0];
+      localStream.getTracks().forEach(t => t.stop());
+      localStream=newStream;
+      Object.values(peers).forEach(pc => {
+        pc.getSenders().find(s=>s.track.kind==="video")?.replaceTrack(videoTrack);
+        pc.getSenders().find(s=>s.track.kind==="audio")?.replaceTrack(audioTrack);
       });
-
-      const videoTrack = newStream.getVideoTracks()[0];
-      const audioTrack = newStream.getAudioTracks()[0];
-
-      const senderV = Object.values(peers).flatMap(pc =>
-        pc.getSenders().filter(s => s.track.kind === "video")
-      );
-      const senderA = Object.values(peers).flatMap(pc =>
-        pc.getSenders().filter(s => s.track.kind === "audio")
-      );
-
-      senderV.forEach(s => s.replaceTrack(videoTrack));
-      senderA.forEach(s => s.replaceTrack(audioTrack));
-
-      localStream.getTracks().forEach(t => t.stop());
-      localStream = newStream;
-      localStream.getVideoTracks()[0].enabled = camOn;
-      localStream.getAudioTracks()[0].enabled = micOn;
-
-      videoElems[userName].querySelector("video").srcObject = newStream;
-      showToast("Camera Flipped");
+      videoElems[userName].video.srcObject = newStream;
+      showToast("Camera flipped");
     }
 
-    function sendEmoji() {
-      const emoji = prompt("Send Emoji (e.g., 😊):");
-      if (emoji) {
-        ws.send(JSON.stringify({ type: "signal", roomId, payload: { emoji } }));
-        showEmojiOn(userName, emoji);
-      }
+    function sendEmoji(){
+      const e = prompt("Emoji to send:");
+      if(!e) return;
+      ws.send(JSON.stringify({ type:"signal", roomId, from:userName, payload:{emoji:e} }));
+      showToast("Emoji sent!");
     }
 
-    function shareRoom() {
+    function shareRoom(){
       navigator.clipboard.writeText(window.location.href);
-      showToast("Room link copied!");
+      showToast("Link copied!");
     }
 
-    function leaveRoom() {
+    function leaveRoom(){
       ws.close();
-      localStream.getTracks().forEach(t => t.stop());
-      location.href = "/";
+      localStream.getTracks().forEach(t=>t.stop());
+      location.href="/";
     }
   </script>
 </body>
