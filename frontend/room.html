@@ -1,127 +1,188 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
-  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Callio – In Call</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Callio Room</title>
   <style>
     :root {
-      --bg: #0f172a; --fg: #f8fafc; --secondary: #334155;
-      --accent: #3b82f6; --error: #ef4444;
+      --bg: #f9f9f9;
+      --text: #111;
+      --accent: #2563eb;
+      --border: #ddd;
+      --muted: #888;
     }
     body {
-      background: var(--bg); color: var(--fg); font-family: 'Inter', sans-serif;
-      margin:0; display:flex; flex-direction:column;
-      height:100vh; align-items:center; justify-content:center;
-      gap:20px; padding:1rem;
+      font-family: sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
     }
-    .label { font-size:1.25rem; font-weight:600; }
-    .video-container {
-      display:flex; gap:20px;
+    .room {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+      padding: 2rem;
     }
-    video {
-      width:140px; height:140px; background:var(--secondary);
-      border-radius:12px; object-fit:cover;
+    .user-card {
+      width: 160px;
+      height: 200px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      border: 1px solid var(--border);
     }
-    .controls {
-      display:flex; gap:16px;
+    .user-card video {
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
+      display: block;
     }
-    button {
-      padding:12px; font-size:18px; border:none;
-      border-radius:10px; cursor:pointer;
-      background:var(--secondary); color:var(--fg);
-      transition:background 0.2s;
+    .avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 1.5rem;
+      margin-bottom: 8px;
     }
-    button:hover { background: var(--accent); }
-    #end { background:var(--error); color:white; }
+    .name {
+      font-size: 1rem;
+      color: var(--text);
+      font-weight: 500;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-  <div class="label">Room: <span id="room-span">—</span></div>
 
-  <div class="video-container">
-    <video id="localVideo" autoplay muted playsinline></video>
-    <video id="remoteVideo" autoplay playsinline></video>
-  </div>
+<div class="room" id="room"></div>
 
-  <div class="controls">
-    <button id="mic-btn">🔇 Mute</button>
-    <button id="end">❌ End Call</button>
-  </div>
+<script>
+  const SIGNAL_SERVER = "wss://callio.onrender.com";
+  const roomId = new URLSearchParams(window.location.search).get("id");
+  const userName = localStorage.getItem("userName") || "Guest";
 
-  <script type="module">
-    import { io } from 'https://cdn.socket.io/4.7.2/socket.io.esm.min.js';
+  const socket = new WebSocket(SIGNAL_SERVER);
+  const peers = {};
+  const localStreamPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: false });
 
-    const roomId = new URLSearchParams(location.search).get('id');
-    if (!roomId) location.href = 'index.html';
+  const roomEl = document.getElementById("room");
 
-    document.getElementById('room-span').textContent = roomId;
+  const createCard = (name, stream = null, isSelf = false) => {
+    const card = document.createElement("div");
+    card.className = "user-card";
+    card.id = `user-${name}`;
 
-    const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-    const micBtn = document.getElementById('mic-btn');
-    const endBtn = document.getElementById('end');
-
-    const socket = io('https://callio.onrender.com', { transports: ['polling', 'websocket'] });
-    let pc, localStream;
-
-    socket.on('connect', () => {
-      socket.emit('join', roomId);
-    });
-
-    socket.on('signal', async data => {
-      if (!pc) return;
-      if (data.sdp) {
-        await pc.setRemoteDescription(data);
-        if (data.type === 'offer') {
-          const ans = await pc.createAnswer();
-          await pc.setLocalDescription(ans);
-          socket.emit('signal', { roomId, payload: pc.localDescription });
-        }
-      } else if (data.candidate) {
-        await pc.addIceCandidate(data);
-      }
-    });
-
-    async function start() {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      localVideo.srcObject = localStream;
-
-      pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-      });
-
-      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-      pc.onicecandidate = e => {
-        if (e.candidate) {
-          socket.emit('signal', { roomId, payload: e.candidate });
-        }
-      };
-
-      pc.ontrack = e => {
-        remoteVideo.srcObject = e.streams[0];
-      };
-
-      pc.onnegotiationneeded = async () => {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit('signal', { roomId, payload: pc.localDescription });
-      };
+    if (stream && stream.getVideoTracks().length > 0) {
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = isSelf;
+      card.appendChild(video);
+    } else {
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = name[0]?.toUpperCase() || "?";
+      card.appendChild(avatar);
     }
 
-    micBtn.onclick = () => {
-      const audioTrack = localStream.getAudioTracks()[0];
-      audioTrack.enabled = !audioTrack.enabled;
-      micBtn.textContent = audioTrack.enabled ? '🔇 Mute' : '🎤 Unmute';
+    const label = document.createElement("div");
+    label.className = "name";
+    label.textContent = name + (isSelf ? " (You)" : "");
+    card.appendChild(label);
+
+    return card;
+  };
+
+  function addOrUpdateCard(name, stream, isSelf) {
+    const existing = document.getElementById(`user-${name}`);
+    if (existing) roomEl.removeChild(existing);
+    roomEl.appendChild(createCard(name, stream, isSelf));
+  }
+
+  socket.onopen = async () => {
+    const stream = await localStreamPromise;
+    addOrUpdateCard(userName, stream, true);
+    socket.send(JSON.stringify({ type: "join", roomId, name: userName }));
+
+    socket.onmessage = async (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === "signal" && data.from && data.payload) {
+        let pc = peers[data.from];
+        if (!pc) {
+          pc = createPeer(data.from, false);
+          peers[data.from] = pc;
+        }
+        await pc.setRemoteDescription(data.payload);
+        if (data.payload.type === "offer") {
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.send(JSON.stringify({
+            type: "signal",
+            roomId,
+            from: userName,
+            to: data.from,
+            payload: pc.localDescription,
+          }));
+        }
+      } else if (data.type === "joined" && data.name !== userName) {
+        const pc = createPeer(data.name, true);
+        peers[data.name] = pc;
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.send(JSON.stringify({
+          type: "signal",
+          roomId,
+          from: userName,
+          to: data.name,
+          payload: pc.localDescription,
+        }));
+      }
+    };
+  };
+
+  function createPeer(remoteName, isInitiator) {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+
+    localStreamPromise.then(stream => {
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+    });
+
+    pc.onicecandidate = e => {
+      if (e.candidate) {
+        socket.send(JSON.stringify({
+          type: "signal",
+          roomId,
+          from: userName,
+          to: remoteName,
+          payload: { type: "candidate", candidate: e.candidate }
+        }));
+      }
     };
 
-    endBtn.onclick = () => {
-      pc && pc.close();
-      socket.disconnect();
-      location.href = 'index.html';
+    pc.ontrack = e => {
+      const remoteStream = e.streams[0];
+      addOrUpdateCard(remoteName, remoteStream, false);
     };
 
-    start().catch(err => alert('Microphone access error: ' + err.message));
-  </script>
+    return pc;
+  }
+</script>
+
 </body>
 </html>
