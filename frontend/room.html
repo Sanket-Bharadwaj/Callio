@@ -1,263 +1,359 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Join a video call room with Callio">
   <title>Callio Room</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%233b82f6' d='M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9zm-3 12H7v-2h2v2zm0-4H7V9h2v2zm5 4h-2v-2h2v2zm0-4h-2V9h2v2z'/></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --text: #f1f5f9;
-      --accent: #3b82f6;
-      --border: #334155;
-    }
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem;
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-    }
-    header button {
-      margin-left: 0.5rem;
-      padding: 0.5rem 1rem;
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    main {
-      flex: 1;
-      position: relative;
-      background: black;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    #remote-video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .controls {
-      display: flex;
-      justify-content: center;
-      gap: 0.5rem;
-      padding: 0.5rem;
-      background: var(--card);
-      border-top: 1px solid var(--border);
-    }
-    .controls button {
-      padding: 0.5rem 1rem;
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    #toast {
-      position: fixed;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--card);
-      color: var(--text);
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      display: none;
-    }
-    .emoji {
-      position: absolute;
-      font-size: 3rem;
-      animation: fade 1s ease-out;
-      top: 40%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-    }
     @keyframes fade {
-      from { opacity: 1; }
-      to { opacity: 0; transform: translateY(-50px); }
+      0% { opacity: 1; }
+      100% { opacity: 0; }
     }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .fade-in { animation: fadeIn 0.5s ease-out; }
+    .emoji-overlay { font-size: 2rem; position: absolute; pointer-events: none; animation: fade 1.2s; top: 0; left: 0; }
+    .toast { position: fixed; bottom: 1rem; right: 1rem; animation: fade 3s forwards; }
+    .loading::after {
+      content: '';
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      margin-left: 0.5rem;
+      border: 2px solid white;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .control-btn svg { width: 1.5rem; height: 1.5rem; }
+    .control-btn:hover svg { stroke: #dbeafe; }
+    .control-btn.off { background-color: #ef4444; }
+    .control-btn.on { background-color: #22c55e; }
+    #videos { position: fixed; bottom: 6rem; right: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; max-width: 50%; z-index: 10; }
+    .video-container video { width: 120px; height: 90px; }
   </style>
 </head>
-<body>
-  <header>
-    <div>Room: <strong id="room-code"></strong></div>
-    <div>
-      <button id="share-btn">Share</button>
-      <button id="leave-btn">Leave</button>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+  <header class="flex justify-between items-center p-4 bg-gray-800 shadow-md">
+    <h2 class="text-lg font-semibold">Room: <span id="room-code" class="text-blue-400"></span></h2>
+    <div class="flex gap-2">
+      <button id="share-btn" class="control-btn p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Copy room link">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+        <span class="share-text">Share</span>
+      </button>
+      <button id="leave-btn" class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Leave room">Leave</button>
     </div>
   </header>
-
-  <main>
-    <video id="remote-video" autoplay playsinline></video>
-    <video id="local-video" autoplay muted playsinline style="position: absolute; bottom: 80px; right: 10px; width: 150px; border: 2px solid var(--border);"></video>
-  </main>
-
-  <div class="controls">
-    <button id="mute-btn">Mic Off</button>
-    <button id="camera-btn">Cam Off</button>
-    <button id="flip-btn">Flip Cam</button>
-    <button id="emoji-btn">Emoji</button>
+  <main id="videos"></main>
+  <div class="controls flex flex-wrap gap-4 p-4 bg-gray-800 justify-center fixed bottom-0 left-0 right-0">
+    <button id="mute-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200 off" aria-label="Toggle microphone">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+      </svg>
+    </button>
+    <button id="camera-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200 off" aria-label="Toggle camera">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+    </button>
+    <button id="flip-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Flip camera">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+      </svg>
+    </button>
+    <button id="emoji-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Send emoji">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </button>
   </div>
-
-  <div id="toast"></div>
-
+  <div id="toast" class="toast hidden bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg">
+    <span id="toastMessage"></span>
+  </div>
   <script>
-    const ws = new WebSocket("wss://callio.onrender.com");
+    // Setup
     const roomId = new URLSearchParams(location.search).get("id");
+    const ws = new WebSocket("wss://callio.onrender.com");
     const userName = localStorage.getItem("userName") || prompt("Enter name") || "You";
     localStorage.setItem("userName", userName);
     document.getElementById("room-code").textContent = roomId;
 
-    const remoteVideo = document.getElementById("remote-video");
-    const localVideo = document.getElementById("local-video");
-    const peers = {};
-    let localStream, videoDeviceId = null;
+    const peers = {};           // { peerName → RTCPeerConnection }
+    const streams = {};         // { peerName → MediaStream }
+    const containers = {};      // { peerName → video element }
+
+    let localStream = null;
+    let currentCamId = null;
 
     function showToast(msg) {
-      const t = document.getElementById("toast");
-      t.textContent = msg;
-      t.style.display = "block";
-      setTimeout(() => t.style.display = "none", 2000);
+      const toast = document.getElementById("toast");
+      const toastMessage = document.getElementById("toastMessage");
+      toastMessage.textContent = msg;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
     }
 
-    async function getMedia() {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true
+    function showEmoji(el, emoji) {
+      const o = document.createElement("div");
+      o.className = "emoji-overlay";
+      o.textContent = emoji;
+      el.parentNode.append(o);
+      setTimeout(() => o.remove(), 1200);
+    }
+
+    async function startLocal() {
+      try {
+        const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+        currentCamId = currentCamId || cams?.[0]?.deviceId;
+        if (!currentCamId) {
+          showToast("No camera found");
+          return;
+        }
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: currentCamId } },
+          audio: true
+        });
+        localStream.getAudioTracks()[0].enabled = false; // Mute by default
+        localStream.getVideoTracks()[0].enabled = false; // Camera off by default
+        addVideo("You", localStream, true);
+        showToast("Camera and microphone off by default");
+      } catch (err) {
+        console.error("startLocal error:", err);
+        showToast("Failed to access camera or microphone");
+      }
+    }
+
+    function addVideo(peerName, stream, isLocal) {
+      if (containers[peerName]) return;
+      const div = document.createElement("div");
+      div.className = "video-container relative";
+      const vid = document.createElement("video");
+      vid.autoplay = vid.playsInline = true;
+      vid.srcObject = stream;
+      vid.className = "w-32 h-24 bg-black rounded-lg border-2 border-gray-600 object-cover";
+      vid.id = isLocal ? "local-video" : `remote-video-${peerName}`;
+      if (isLocal) vid.muted = true;
+      div.appendChild(vid);
+      const tag = document.createElement("div");
+      tag.className = "user-tag absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1 py-0.5 rounded";
+      tag.textContent = peerName;
+      div.appendChild(tag);
+      document.getElementById("videos").appendChild(div);
+      containers[peerName] = vid;
+      vid.play().catch(err => {
+        console.error(`Failed to play video for ${peerName}:`, err);
+        showToast(`Failed to play video for ${peerName}`);
       });
-      localStream = stream;
-      localVideo.srcObject = stream;
-      updateButtons();
+      streams[peerName] = stream;
     }
 
-    function updateButtons() {
-      document.getElementById("mute-btn").textContent = localStream.getAudioTracks()[0].enabled ? "Mic On" : "Mic Off";
-      document.getElementById("camera-btn").textContent = localStream.getVideoTracks()[0].enabled ? "Cam On" : "Cam Off";
-    }
-
-    function createPeer(isInitiator) {
-      const peer = new RTCPeerConnection({
+    function createPeer(peerName, isInitiator) {
+      if (peers[peerName]) return;
+      const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
       });
-      localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
-
-      peer.ontrack = e => {
-        remoteVideo.srcObject = e.streams[0];
+      peers[peerName] = pc;
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+      pc.ontrack = evt => {
+        if (!streams[peerName]) {
+          streams[peerName] = new MediaStream();
+          addVideo(peerName, streams[peerName], false);
+        }
+        streams[peerName].addTrack(evt.track);
+        console.log(`Received stream for ${peerName}:`, streams[peerName]);
       };
-
-      peer.onicecandidate = e => {
+      pc.onicecandidate = e => {
         if (e.candidate) {
-          ws.send(JSON.stringify({ type: "signal", roomId, from: userName, payload: { candidate: e.candidate } }));
+          console.log(`Sending ICE candidate to ${peerName}`);
+          ws.send(JSON.stringify({
+            type: "signal",
+            roomId,
+            to: peerName,
+            from: userName,
+            payload: { candidate: e.candidate }
+          }));
         }
       };
-
+      pc.onconnectionstatechange = () => {
+        console.log(`Peer connection state for ${peerName}: ${pc.connectionState}`);
+        if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+          showToast(`Connection to ${peerName} failed`);
+          delete peers[peerName];
+          if (containers[peerName]) {
+            containers[peerName].parentNode.remove();
+            delete containers[peerName];
+            delete streams[peerName];
+          }
+        }
+      };
       if (isInitiator) {
-        peer.createOffer().then(o => {
-          peer.setLocalDescription(o);
-          ws.send(JSON.stringify({ type: "signal", roomId, from: userName, payload: { sdp: o } }));
-        });
+        pc.createOffer()
+          .then(o => {
+            pc.setLocalDescription(o);
+            console.log(`Sending SDP offer to ${peerName}`);
+            ws.send(JSON.stringify({
+              type: "signal",
+              roomId,
+              to: peerName,
+              from: userName,
+              payload: { sdp: o }
+            }));
+          })
+          .catch(err => {
+            console.error(`Failed to create offer for ${peerName}:`, err);
+            showToast(`Failed to initiate connection with ${peerName}`);
+          });
       }
-
-      peers[roomId] = peer;
     }
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "join", roomId, name: userName }));
-      getMedia();
+      console.log("WebSocket connected");
+      ws.send(JSON.stringify({ type: "join", roomId, from: userName }));
+      startLocal();
     };
 
     ws.onmessage = async msg => {
       const data = JSON.parse(msg.data);
-      const { type, payload } = data;
-
-      if (type === "joined") {
-        createPeer(true);
-        showToast("Peer joined");
-      }
-
-      if (type === "signal") {
-        if (!peers[roomId]) createPeer(false);
-        const peer = peers[roomId];
-        if (payload.sdp) {
-          await peer.setRemoteDescription(payload.sdp);
-          if (payload.sdp.type === "offer") {
-            const ans = await peer.createAnswer();
-            peer.setLocalDescription(ans);
-            ws.send(JSON.stringify({ type: "signal", roomId, from: userName, payload: { sdp: ans } }));
+      console.log("WebSocket message received:", data);
+      switch (data.type) {
+        case "joined":
+          if (data.from !== userName) {
+            createPeer(data.from, true);
+            showToast(`${data.from} joined`);
           }
-        } else if (payload.candidate) {
-          await peer.addIceCandidate(payload.candidate);
-        }
-      }
-
-      if (type === "emoji") {
-        const e = document.createElement("div");
-        e.className = "emoji";
-        e.textContent = payload.emoji;
-        remoteVideo.parentElement.appendChild(e);
-        setTimeout(() => e.remove(), 1000);
+          break;
+        case "signal":
+          const peerName = data.from;
+          if (!peers[peerName]) createPeer(peerName, false);
+          const pc = peers[peerName];
+          if (data.payload.sdp) {
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(data.payload.sdp));
+              if (data.payload.sdp.type === "offer") {
+                const ans = await pc.createAnswer();
+                await pc.setLocalDescription(ans);
+                console.log(`Sending SDP answer to ${peerName}`);
+                ws.send(JSON.stringify({
+                  type: "signal",
+                  roomId,
+                  to: peerName,
+                  from: userName,
+                  payload: { sdp: ans }
+                }));
+              }
+            } catch (err) {
+              console.error(`Failed to handle SDP for ${peerName}:`, err);
+              showToast(`Failed to connect with ${peerName}`);
+            }
+          }
+          if (data.payload.candidate) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(data.payload.candidate));
+              console.log(`Added ICE candidate for ${peerName}`);
+            } catch (err) {
+              console.error(`Failed to add ICE candidate for ${peerName}:`, err);
+            }
+          }
+          break;
+        case "emoji":
+          const vid = containers[data.from];
+          if (vid) showEmoji(vid, data.emoji);
+          showToast(`${data.from}: ${data.emoji}`);
+          break;
       }
     };
 
-    document.getElementById("share-btn").onclick = () => {
-      navigator.clipboard.writeText(location.href)
-        .then(() => showToast("Link copied"));
+    ws.onerror = err => {
+      console.error("WebSocket error:", err);
+      showToast("WebSocket connection error");
     };
 
-    document.getElementById("leave-btn").onclick = () => {
-      localStream.getTracks().forEach(t => t.stop());
-      ws.close();
-      window.location.href = "index.html";
+    ws.onclose = () => {
+      console.log("WebSocket closed");
+      showToast("WebSocket connection closed");
     };
 
     document.getElementById("mute-btn").onclick = () => {
       const t = localStream.getAudioTracks()[0];
       t.enabled = !t.enabled;
-      updateButtons();
-      showToast(t.enabled ? "Mic On" : "Mic Off");
+      const btn = document.getElementById("mute-btn");
+      btn.classList.toggle("off", !t.enabled);
+      btn.classList.toggle("on", t.enabled);
+      showToast(t.enabled ? "Unmuted" : "Muted");
     };
 
     document.getElementById("camera-btn").onclick = () => {
       const t = localStream.getVideoTracks()[0];
       t.enabled = !t.enabled;
-      localVideo.style.display = t.enabled ? "block" : "none";
-      updateButtons();
+      const btn = document.getElementById("camera-btn");
+      btn.classList.toggle("off", !t.enabled);
+      btn.classList.toggle("on", t.enabled);
       showToast(t.enabled ? "Cam On" : "Cam Off");
     };
 
     document.getElementById("flip-btn").onclick = async () => {
-      const cams = (await navigator.mediaDevices.enumerateDevices())
-        .filter(d => d.kind === "videoinput");
-      if (cams.length < 2) return showToast("No other cam");
-      const idx = cams.findIndex(c => c.deviceId === videoDeviceId);
-      videoDeviceId = cams[(idx + 1) % cams.length].deviceId;
-      await getMedia();
-      const peer = peers[roomId];
-      const sender = peer.getSenders().find(s => s.track.kind === "video");
-      sender.replaceTrack(localStream.getVideoTracks()[0]);
-      showToast("Camera flipped");
+      try {
+        const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+        const idx = cams.findIndex(c => c.deviceId === currentCamId);
+        currentCamId = cams[(idx + 1) % cams.length].deviceId;
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: currentCamId } },
+          audio: true
+        });
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = stream;
+        localStream.getAudioTracks()[0].enabled = document.getElementById("mute-btn").classList.contains("on");
+        localStream.getVideoTracks()[0].enabled = document.getElementById("camera-btn").classList.contains("on");
+        containers["You"].srcObject = stream;
+        Object.values(peers).forEach(pc => {
+          const videoSender = pc.getSenders().find(s => s.track.kind === 'video');
+          if (videoSender) videoSender.replaceTrack(localStream.getVideoTracks()[0]);
+          const audioSender = pc.getSenders().find(s => s.track.kind === 'audio');
+          if (audioSender) audioSender.replaceTrack(localStream.getAudioTracks()[0]);
+        });
+        showToast("Camera switched");
+      } catch (err) {
+        console.error("Flip camera error:", err);
+        showToast("Failed to switch camera");
+      }
     };
 
     document.getElementById("emoji-btn").onclick = () => {
-      const emoji = prompt("Enter emoji:");
-      if (emoji) {
-        ws.send(JSON.stringify({ type: "emoji", roomId, payload: { emoji } }));
+      const e = prompt("Send emoji:");
+      if (e) {
+        ws.send(JSON.stringify({ type: "emoji", roomId, from: userName, emoji: e }));
+        showEmoji(containers[userName], e);
       }
+    };
+
+    document.getElementById("share-btn").onclick = () => {
+      const btn = document.getElementById("share-btn");
+      const shareText = btn.querySelector(".share-text");
+      navigator.clipboard.writeText(location.href).then(() => {
+        shareText.textContent = "Copied!";
+        showToast("Link copied!");
+        setTimeout(() => shareText.textContent = "Share", 2000);
+      }).catch(err => {
+        console.error("Failed to copy link:", err);
+        showToast("Failed to copy link");
+      });
+    };
+
+    document.getElementById("leave-btn").onclick = () => {
+      localStream?.getTracks().forEach(t => t.stop());
+      Object.values(peers).forEach(pc => pc.close());
+      ws.close();
+      window.location.href = "index.html";
     };
   </script>
 </body>
