@@ -105,6 +105,7 @@
 
         const localVideo = document.getElementById('localVideo');
         const videoContainer = document.getElementById('videoContainer');
+        const localVideoContainer = document.getElementById('localVideoContainer');
         const toggleMic = document.getElementById('toggleMic');
         const toggleCamera = document.getElementById('toggleCamera');
         const flipCamera = document.getElementById('flipCamera');
@@ -122,6 +123,12 @@
         }
 
         async function getLocalStream() {
+            // Clean up existing stream if any
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+                localVideo.srcObject = null;
+            }
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15 } },
@@ -151,8 +158,14 @@
         }
 
         async function tryAudioOnly() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+                localVideo.srcObject = null;
+            }
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localVideo.srcObject = null; // No video element for audio-only
                 showToast('Video unavailable, using audio only');
                 checkPeerCount();
             } catch (audioErr) {
@@ -168,6 +181,7 @@
         }
 
         function createPeerConnection(peerId) {
+            if (peers.has(peerId)) return null; // Prevent duplicate peer connections
             const pc = new RTCPeerConnection({ iceServers });
             pc.onicecandidate = ({ candidate }) => {
                 if (candidate) {
@@ -214,16 +228,17 @@
 
                     if (signalType === 'offer') {
                         const pc = createPeerConnection(peerId);
-                        if (!pc) return;
-                        peers.get(peerId).username = remoteUsername;
-                        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-                        const answer = await pc.createAnswer();
-                        await pc.setLocalDescription(answer);
-                        ws.send(JSON.stringify({
-                            type: 'signal',
-                            roomId,
-                            payload: { type: 'answer', answer, peerId, username }
-                        }));
+                        if (pc) {
+                            peers.get(peerId).username = remoteUsername;
+                            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                            const answer = await pc.createAnswer();
+                            await pc.setLocalDescription(answer);
+                            ws.send(JSON.stringify({
+                                type: 'signal',
+                                roomId,
+                                payload: { type: 'answer', answer, peerId, username }
+                            }));
+                        }
                     } else if (signalType === 'answer') {
                         const pc = peers.get(peerId)?.pc;
                         if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
@@ -232,15 +247,16 @@
                         if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));
                     } else if (signalType === 'new-peer') {
                         const pc = createPeerConnection(peerId);
-                        if (!pc) return;
-                        peers.get(peerId).username = remoteUsername;
-                        const offer = await pc.createOffer();
-                        await pc.setLocalDescription(offer);
-                        ws.send(JSON.stringify({
-                            type: 'signal',
-                            roomId,
-                            payload: { type: 'offer', offer, peerId, username }
-                        }));
+                        if (pc) {
+                            peers.get(peerId).username = remoteUsername;
+                            const offer = await pc.createOffer();
+                            await pc.setLocalDescription(offer);
+                            ws.send(JSON.stringify({
+                                type: 'signal',
+                                roomId,
+                                payload: { type: 'offer', offer, peerId, username }
+                            }));
+                        }
                     } else if (signalType === 'emoji') {
                         const container = document.getElementById(`peer-${peerId}`);
                         if (container) {
@@ -338,12 +354,17 @@
             localStream?.getTracks().forEach(track => track.stop());
             peers.forEach(({ pc }) => pc.close());
             peers.clear();
-            videoContainer.innerHTML = '';
-            videoContainer.appendChild(document.getElementById('localVideoContainer'));
+            localStream = null;
             ws.close();
         }
 
         window.addEventListener('beforeunload', cleanup);
+
+        // Ensure localVideoContainer is only in videoContainer once
+        if (videoContainer.children.length > 1) {
+            videoContainer.innerHTML = '';
+            videoContainer.appendChild(localVideoContainer);
+        }
 
         getLocalStream();
     </script>
