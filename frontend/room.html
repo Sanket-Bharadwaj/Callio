@@ -1,105 +1,87 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Join a video call room with Callio">
   <title>Callio Room</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%233b82f6' d='M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9zm-3 12H7v-2h2v2zm0-4H7V9h2v2zm5 4h-2v-2h2v2zm0-4h-2V9h2v2z'/></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root {
-      --bg-color: #0f172a;
-      --card-color: #1e293b;
-      --text-color: #f1f5f9;
-      --accent-color: #3b82f6;
-      --border-color: #334155;
+    @keyframes fade {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
     }
-    body {
-      background: var(--bg-color);
-      color: var(--text-color);
-      font-family: Inter, sans-serif;
-      margin: 0;
-      padding: 0;
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--card-color);
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
-    h2 {
-      margin: 0;
-      font-size: 1.2rem;
+    .fade-in { animation: fadeIn 0.5s ease-out; }
+    .emoji-overlay { font-size: 2rem; position: absolute; pointer-events: none; animation: fade 1.2s; top: 0; left: 0; }
+    .toast { position: fixed; bottom: 1rem; right: 1rem; animation: fade 3s forwards; }
+    .loading::after {
+      content: '';
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      margin-left: 0.5rem;
+      border: 2px solid white;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
     }
-    #room-code {
-      color: var(--accent-color);
-      font-weight: 500;
-    }
-    .main {
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-      gap: 20px;
-      align-items: center;
-      justify-content: center;
-    }
-    video {
-      width: 100%;
-      max-width: 480px;
-      border-radius: 12px;
-      border: 2px solid var(--border-color);
-      background: #000;
-    }
-    .controls {
-      display: flex;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    button {
-      padding: 10px 16px;
-      border-radius: 8px;
-      background: var(--accent-color);
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-weight: 500;
-      font-size: 14px;
-    }
-    button:hover {
-      background: #2563eb;
-    }
-    .user-tag {
-      text-align: center;
-      font-size: 0.9rem;
-      margin-top: 4px;
-      color: #94a3b8;
-    }
+    .control-btn svg { width: 1.5rem; height: 1.5rem; }
+    .control-btn:hover svg { stroke: #dbeafe; }
+    .control-btn.off { background-color: #ef4444; }
+    .control-btn.on { background-color: #22c55e; }
+    #videos { position: fixed; bottom: 6rem; right: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; max-width: 50%; z-index: 10; }
+    .video-container video { width: 120px; height: 90px; }
   </style>
 </head>
-<body>
-  <header>
-    <h2>Call Room: <span id="room-code"></span></h2>
-    <button id="share-btn">Share</button>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+  <header class="flex justify-between items-center p-4 bg-gray-800 shadow-md">
+    <h2 class="text-lg font-semibold">Room: <span id="room-code" class="text-blue-400"></span></h2>
+    <div class="flex gap-2">
+      <button id="share-btn" class="control-btn p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Copy room link">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+        <span class="share-text">Share</span>
+      </button>
+      <button id="leave-btn" class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Leave room">Leave</button>
+    </div>
   </header>
-
-  <section class="main">
-    <div>
-      <video id="local-video" autoplay muted playsinline></video>
-      <div class="user-tag" id="local-name"></div>
-    </div>
-
-    <div>
-      <video id="remote-video" autoplay playsinline></video>
-      <div class="user-tag" id="remote-name"></div>
-    </div>
-
-    <div class="controls">
-      <button id="mute-btn">Mute</button>
-      <button id="camera-btn">Hide Camera</button>
-    </div>
-  </section>
-
+  <main id="videos"></main>
+  <div class="controls flex flex-wrap gap-4 p-4 bg-gray-800 justify-center fixed bottom-0 left-0 right-0">
+    <button id="mute-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200 off" aria-label="Toggle microphone">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+      </svg>
+    </button>
+    <button id="camera-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200 off" aria-label="Toggle camera">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+    </button>
+    <button id="flip-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Flip camera">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+      </svg>
+    </button>
+    <button id="emoji-btn" class="control-btn p-3 bg-blue-600 rounded-lg hover:bg-blue-700 transition duration-200" aria-label="Send emoji">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </button>
+  </div>
+  <div id="toast" class="toast hidden bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg">
+    <span id="toastMessage"></span>
+  </div>
   <script>
+    // Setup
     const signalingServer = "wss://callio.onrender.com";
     const ws = new WebSocket(signalingServer);
     const roomId = new URLSearchParams(window.location.search).get("id");
