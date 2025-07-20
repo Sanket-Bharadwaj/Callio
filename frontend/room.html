@@ -36,16 +36,26 @@
             width: 1.5rem;
             height: 1.5rem;
         }
+        #controls {
+            bottom: 0;
+            width: 100%;
+        }
+        .no-video-placeholder {
+            background-color: #4b5563;
+            border-radius: 0.25rem;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col">
-    <div id="videoContainer" class="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 p-2 relative">
-        <div id="localVideoContainer" class="absolute bottom-4 right-4 w-32 h-20 bg-gray-800 rounded-lg overflow-hidden sm:w-40 sm:h-24">
+    <div id="videoContainer" class="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 p-2 relative overflow-auto">
+        <div id="localVideoContainer" class="absolute bottom-4 right-4 w-20 h-10 sm:w-32 sm:h-16 bg-gray-800 rounded-lg overflow-hidden flex items-center justify-center">
             <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
-            <p id="localUsername" class="text-center text-sm mt-1"></p>
+            <div id="noVideoPlaceholder" class="no-video-placeholder w-full h-full flex items-center justify-center hidden">
+                <p id="localUsername" class="text-xs sm:text-sm text-center"></p>
+            </div>
         </div>
     </div>
-    <div id="controls" class="bg-gray-800 p-2 flex justify-center space-x-2 sm:space-x-4">
+    <div id="controls" class="bg-gray-800 p-2 flex justify-center space-x-2 sm:space-x-4 fixed bottom-0 left-0 z-10">
         <button id="toggleMic" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full" title="Toggle Microphone">
             <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
@@ -77,7 +87,7 @@
             </svg>
         </button>
     </div>
-    <div id="toastContainer" class="fixed bottom-4 right-4 space-y-2"></div>
+    <div id="toastContainer" class="fixed bottom-16 right-4 space-y-2"></div>
     <script>
         if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
             alert('Callioo requires HTTPS for camera and microphone access. Please access the app via a secure connection.');
@@ -103,10 +113,12 @@
         let isCameraOn = initialCamEnabled;
         let currentFacingMode = 'user';
         let permissionRetryCount = 0;
-        const MAX_RETRIES = 2;
+        const MAX_RETRIES = 3;
 
         const localVideo = document.getElementById('localVideo');
         const videoContainer = document.getElementById('videoContainer');
+        const localVideoContainer = document.getElementById('localVideoContainer');
+        const noVideoPlaceholder = document.getElementById('noVideoPlaceholder');
         const toggleMic = document.getElementById('toggleMic');
         const toggleCamera = document.getElementById('toggleCamera');
         const flipCamera = document.getElementById('flipCamera');
@@ -153,17 +165,19 @@
                 });
                 localVideo.srcObject = localStream;
                 await setAudioOutputToSpeaker();
+                noVideoPlaceholder.classList.add('hidden');
+                localVideo.classList.remove('hidden');
                 showToast('Local stream started');
                 checkPeerCount();
             } catch (err) {
-                console.error('Error accessing media devices:', err);
-                if (err.name === 'NotAllowedError') {
+                console.error('Permission Error:', err.name, err.message);
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
                     if (permissionRetryCount < MAX_RETRIES) {
                         permissionRetryCount++;
-                        showToast('Camera/mic access denied. Please grant permissions and try again.');
+                        showToast(`Camera/mic access denied. Please grant permissions (${MAX_RETRIES - permissionRetryCount} retries left). Check browser settings if this persists.`);
                         setTimeout(getLocalStream, 2000);
                     } else {
-                        showToast('Camera/mic access denied. Falling back to audio-only.');
+                        showToast('Camera/mic access denied permanently. Check browser settings (Settings > Privacy > Camera/Microphone) and refresh.');
                         tryAudioOnly();
                     }
                 } else if (err.name === 'NotFoundError') {
@@ -179,8 +193,10 @@
             if (localStream) return;
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                localVideo.srcObject = null; // No video
+                localVideo.srcObject = null;
                 await setAudioOutputToSpeaker();
+                noVideoPlaceholder.classList.remove('hidden');
+                localVideo.classList.add('hidden');
                 showToast('Video unavailable, using audio only');
                 checkPeerCount();
             } catch (audioErr) {
@@ -217,7 +233,7 @@
                 container.className = 'relative';
                 container.id = `peer-${peerId}`;
                 const usernameLabel = document.createElement('p');
-                usernameLabel.className = 'text-center text-sm mt-1';
+                usernameLabel.className = 'text-center text-xs sm:text-sm mt-1';
                 usernameLabel.textContent = peers.get(peerId).username;
                 container.appendChild(video);
                 container.appendChild(usernameLabel);
@@ -226,6 +242,30 @@
             localStream?.getTracks().forEach(track => pc.addTrack(track, localStream));
             peers.set(peerId, { pc, username: '' });
             return pc;
+        }
+
+        function updateLayout() {
+            if (!isCameraOn) {
+                noVideoPlaceholder.classList.remove('hidden');
+                localVideo.classList.add('hidden');
+                if (window.innerWidth >= 640) {
+                    // Horizontal layout for PC
+                    localVideoContainer.classList.remove('flex-col');
+                    localVideoContainer.classList.add('flex-row', 'items-center', 'space-x-2');
+                    noVideoPlaceholder.style.width = '80px';
+                    noVideoPlaceholder.style.height = '40px';
+                } else {
+                    // Vertical layout for mobile
+                    localVideoContainer.classList.remove('flex-row');
+                    localVideoContainer.classList.add('flex-col', 'items-center', 'space-y-2');
+                    noVideoPlaceholder.style.width = '40px';
+                    noVideoPlaceholder.style.height = '80px';
+                }
+            } else {
+                noVideoPlaceholder.classList.add('hidden');
+                localVideo.classList.remove('hidden');
+                localVideoContainer.classList.remove('flex-row', 'flex-col', 'items-center', 'space-x-2', 'space-y-2');
+            }
         }
 
         ws.onopen = () => {
@@ -314,6 +354,7 @@
             toggleCamera.innerHTML = isCameraOn
                 ? `<svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>`
                 : `<svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2zM5 5l14 14"></path></svg>`;
+            updateLayout();
             showToast(isCameraOn ? 'Camera on' : 'Camera off');
         });
 
@@ -368,13 +409,15 @@
             peers.forEach(({ pc }) => pc.close());
             peers.clear();
             videoContainer.innerHTML = '';
-            videoContainer.appendChild(document.getElementById('localVideoContainer'));
+            videoContainer.appendChild(localVideoContainer);
             ws.close();
         }
 
         window.addEventListener('beforeunload', cleanup);
+        window.addEventListener('resize', updateLayout);
 
         getLocalStream();
+        updateLayout();
     </script>
 </body>
 </html>
